@@ -24,6 +24,6 @@ Strategic resource allocation to maximize the impact of malaria response.
 ├── 01_data                            # Data files
 ├── 02_code                            # R code file
 ├── 03_output                          # Figures and Tables
-├── GF_RTSS_CE.Rproj           # R.Studio project file
+├── GF_RTSS_CE.Rproj                   # R.Studio project file
 └── README.md                          # Project overview
 ```
