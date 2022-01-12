@@ -2,23 +2,15 @@
 library(didehpc)
 setwd('M:/Hillary/rtss_malariasimulation')
 # remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
-source('./1_functions.R')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
 
-didehpc::didehpc_config()
-didehpc::web_login()
 
-root <- "context"
-
-sources <- c('./1_functions.R')
-
-# src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@feat/demography")
 
-ctx <- context::context_save(root,
-                             sources = sources,
+ctx <- context::context_save(root = "context",
+                             sources = c('./02_code/functions.R'),
                              packages = c("tidyverse", "malariasimulation"),
                              package_sources = src)
 
@@ -33,27 +25,56 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 
 
 # Now set up your job ---------------------------------------------------------
+test <- runsimGF(population = 1000,
+                 seasonality = c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547),
+                 starting_EIR = 1,
+                 warmup = 1*year,
+                 sim_length = 4*year,
+                 speciesprop = c(0.25, 0.25, 0.5),
+                 ITN = 1,
+                 IRS = 1,
+                 treatment = 1,
+                 EPI = 0,               # RTS,S status, age-based EPI program
+                 SV = 0,                # RTS,S status, seasonal vaccination
+                 SMC = 0,               # SMC status
+                 hybrid = 0,            # RTS,S and SMC hybrid status
+                 fifth = 0,             # status of 5th dose for SV or hybrid strategies
+                 name = 'test'
+)
+
+
 year <- 365
 month <- year/12
 warmup <- 20 * year
 sim_length <- 15 * year
-human_population <- 100000
+population <- 100000
 
-# highly seasonal parameters
-high_seas <- get_parameters(list(
-  human_population = human_population,
-  # average_age = 8453.323, # to match flat_demog
-  model_seasonality = TRUE,
-  g0 = 0.284596,
-  g = c(-0.317878, -0.0017527, 0.116455),
-  h = c(-0.331361, 0.293128, -0.0617547),
-  incidence_rendering_min_ages = 0,
-  incidence_rendering_max_ages = 100 * year,
-  clinical_incidence_rendering_min_ages = 0,
-  clinical_incidence_rendering_max_ages = 100 * year,
-  severe_incidence_rendering_min_ages = c(0,0,25)*year,
-  severe_incidence_rendering_max_ages = c(100,5,50)*year,
-  individual_mosquitoes = FALSE))
+# seasonal profiles
+# c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
+high_seas <- c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547)
+low_seas <- c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919)
+
+
+# transmission (EIR -> PfPR2-10)
+EIR_highseas <- c(1.91, 7.62, 15.5, 57.7)
+EIR_lowseas <- c(1.71, 6.82, 13.4, 49.9)
+
+# vector species proportions (arab_params, fun_params, gamb_params)
+speciesprop <- c(0.25, 0.25, 0.5))
+
+# pyrethroid resistance
+resistance <- c()
+
+# LLIN coverage
+LLIN <- c(0,0.15,0.30,0.50,0.55,0.60,0.65,0.70,0.75) # Winskill et al. 2017
+IRS <- c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
+SMC <- c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
+RTSS <- c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
+treatment <- 0.60 # Winskill et al. 2017
+
+# net distribution efficiency
+# LLIN type - new vs. old
+
 
 # set flat demography to match Haley's:
 # https://github.com/ht1212/seasonal_use_case/blob/main/Part_1/2_model_function.R#L44
@@ -69,47 +90,24 @@ high_seas <- set_demography(
   birthrates = find_birthrates(human_population, ages, deathrates)
 )
 
-# seasonal parameters
-low_seas <- get_parameters(list(
-  human_population = human_population,
-  # average_age = 8453.323, # to match flat_demog
-  model_seasonality = TRUE,
-  g0 = 0.285505,
-  g = c(-0.325352, -0.0109352, 0.0779865),
-  h = c(-0.132815, 0.104675, -0.013919),
-  incidence_rendering_min_ages = 0,
-  incidence_rendering_max_ages = 100 * year,
-  clinical_incidence_rendering_min_ages = 0,
-  clinical_incidence_rendering_max_ages = 100 * year,
-  severe_incidence_rendering_min_ages = c(0,0,25)*year,
-  severe_incidence_rendering_max_ages = c(100,5,50)*year,
-  individual_mosquitoes = FALSE))
 
-low_seas <- set_demography(
-  low_seas,
-  agegroups = ages,
-  timesteps = 1,
-  deathrates = matrix(deathrates, nrow = 1),
-  birthrates = find_birthrates(human_population, ages, deathrates)
-)
 
 params <- tibble(params=rep(list(high_seas,high_seas,high_seas,high_seas,
                                  low_seas,low_seas,low_seas,low_seas)))
 season <- c(rep('high_seas',4), rep('low_seas',4))
 
 # calculate from '2_PfPR_match_eir.R'
-# EIR_high <- c(1.1, 4.7, 10.1, 38.2) # malariasimulation, individual_mosquitoes=T
-# EIR_low <- c(1.2, 4.0, 8.7, 32.6) # malariasimulation, individual_mosquitoes=T
-# EIR_high <- c(1.61, 6.92, 13.7, 52.3) # malariasimulation, individual_mosquitoes=F
-# EIR_low <- c(1.51, 6.12, 12.1, 44.1) # malariasimulation, individual_mosquitoes=F
 EIR_high <- c(1.91, 7.62, 15.5, 57.7) # malariasimulation, individual_mosquitoes=F, w/ demography
 EIR_low <- c(1.71, 6.82, 13.4, 49.9) # malariasimulation, individual_mosquitoes=F, w/ demography
+EIR_low <- c()
+EIR_low <- c()
 
 starting_EIR <- c(EIR_high, EIR_low)
 
+# make matrix of all parameter combinations
 combo <- cbind(params, warmup, sim_length, starting_EIR, season)
+head(combo)
 
-combo
 
 # Run tasks -------------------------------------------------------------------
 # NO INTERVENTION
