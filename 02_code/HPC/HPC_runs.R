@@ -1,15 +1,15 @@
 # Set-up ----------------------------------------------------------------------
 library(didehpc)
-setwd('M:/Hillary/rtss_malariasimulation')
+setwd('M:/Hillary/GF-RTSS-CE')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
 
 # remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
-src <- conan::conan_sources("github::mrc-ide/malariasimulation@feat/demography")
+src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
-ctx <- context::context_save(root = "context",
-                             sources = c('./02_code/functions.R'),
+ctx <- context::context_save(path = "M:/Hillary/contexts",
+                             sources = c('./02_code/HPC/functions.R'),
                              packages = c("tidyverse", "malariasimulation"),
                              package_sources = src)
 
@@ -25,49 +25,61 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 
 # Now set up your job ---------------------------------------------------------
 library(tidyverse)
+year <- 365
 
 # population
-population <- 100000
+population <- 10000
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
-pfpr <- c(5,10,15)
+# drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
+# g0 = a0, a = g, b = h
+pfpr <- c(10,30,60) # start at 10% (min rec for RTSS use)
 
   # FIRST
   seas_name <- 'highly seasonal'
   seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
-  starting_EIR <- c(1.1,2.1,3.1)
+  starting_EIR <- c(1.01,4.71,28.5)
   s1 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
   # SECOND
   seas_name <- 'seasonal'
   seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
-  starting_EIR <- c(1.2,2.2,3.2)
+  starting_EIR <- c(1.11,5.41,34.0)
   s2 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
-stable <- rbind(s1,s2)
+  # THIRD
+  seas_name <- 'perennial'
+  seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
+  starting_EIR <- c(1.01,4.61,28.4)
+  s3 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
+
+stable <- rbind(s1, s2, s3)
 
 # vectors: list(arab_params, fun_params, gamb_params)
-speciesprop <- data.frame(speciesprop = rbind(list(c(0.25,0.25,0.5)),
-                                              list(c(0.3,0.3,0.4))),
+speciesprop <- data.frame(speciesprop = rbind(list(c(0.25,0.25,0.5))),
                           row.names = NULL)
 
 # run time
-warmup <- 1*year
-sim_length <- 5*year
+warmup <- 5*year
+sim_length <- 20*year
 
 # interventions
-ITN <- c(0,0.15,0.30,0.50,0.55,0.60,0.65,0.70,0.75) # Winskill et al. 2017
-IRS <-  c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
-treatment <- c(0.60) # Winskill et al. 2017
-SMC <- c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
-RTSS <- c("none", "EPI", "SV", "hybrid")
-RTSScov <- c(0,0.25,0.50,0.75,0.90) # Winskill et al. 2017
-fifth <- c(0,1)
+ITN <- c(0,0.25,0.50,0.75)
+IRS <-  c(0)
+treatment <- c(0.45)
+SMC <- c(0,0.85)
+RTSS <- c("none", "EPI", "SV") # leave out hybrid for now
+RTSScov <- c(0,0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46% first half of 2021
+fifth <- c(0) # one booster for now
 
 interventions <-
   crossing(ITN, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
-  filter(!(RTSS=="none" & RTSScov >0)) %>%            # can't have coverage when no RTSS
-  filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none')))  # can't have fifth doses with EPI or none
+  filter(!(RTSS=="none" & RTSScov >0)) %>%                # can't have coverage when no RTSS
+  filter(!(RTSScov==0 & (RTSS=="EPI" | RTSS=='SV' | RTSS=="hybrid"))) %>%  # can't have 0 coverage with RTSS
+  filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none'))) %>%  # can't have fifth doses with EPI or none
+  filter(!(SMC>0 & (seas_name=="seasonal" | seas_name=="perennial"))) # only administer SMC in highly seasonal settings
+
+name <- "test"
 
 # COMBINE into all combinations of runs
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
@@ -81,10 +93,10 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
          warmup,            # warm-up period
          sim_length,        # length of simulation run
          speciesprop,       # proportion of each vector species
-         ITN,               # ITN status
-         IRS,               # IRS status
-         treatment,         # treatment status
-         SMC,               # SMC status
+         ITN,               # ITN coverage
+         IRS,               # IRS coverage
+         treatment,         # treatment coverage
+         SMC,               # SMC coverage
          RTSS,              # RTS,S strategy
          RTSScov,           # RTS,S coverage
          fifth,             # status of 5th dose for SV or hybrid strategies
@@ -96,21 +108,24 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
 t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
 
-test <- runsimGF(combotest[[1]],
-                 combotest[[2]],
-                 combotest[[3]],
-                 combotest[[4]],
-                 combotest[[5]],
-                 combotest[[6]],
-                 combotest[[7]],
-                 combotest[[8]],
-                 combotest[[9]],
-                 combotest[[10]],
-                 combotest[[11]],
-                 combotest[[12]],
-                 combotest[[13]],
-                 combotest[[14]],
-                 combotest[[15]],
-                 combotest[[16]])
-combotest <- combo[1,]; combotest
 
+# Still to add:
+# insecticide resistance - ask Ellie - we want insecticide resistance to be an option. none / med / high
+# new ITN types to try? - Ask Ellie if we would expect a big diff w/ PBO and IG2. If not a big difference, just choose one as a comparison example.
+
+test <- runsimGF(combo[[1,1]],
+                 combo[[1,2]],
+                 combo[[1,3]],
+                 combo[[1,4]],
+                 combo[[1,5]],
+                 combo[[1,6]],
+                 combo[[1,7]],
+                 combo[[1,8]],
+                 combo[[1,9]],
+                 combo[[1,10]],
+                 combo[[1,11]],
+                 combo[[1,12]],
+                 combo[[1,13]],
+                 combo[[1,14]],
+                 combo[[1,15]],
+                 combo[[1,16]])
