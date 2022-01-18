@@ -9,7 +9,9 @@ runsimGF <- function(population,        # simulation population
                      warmup,            # warm-up period
                      sim_length,        # length of simulation run
                      speciesprop,       # proportion of each vector species
-                     ITN,               # ITN coverage
+                     ITN,               # ITN type - pyr, pbo
+                     ITNuse,            # ITN coverage
+                     resistance,        # resistance level - none 0, med 0.4, high 0.8
                      IRS,               # IRS coverage
                      treatment,         # treatment coverage
                      SMC,               # SMC coverage
@@ -65,26 +67,49 @@ runsimGF <- function(population,        # simulation population
 
   # ITNs ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w
+  # or in Table S1.3 of Ellie's 2021 paper
   # same value for all species
-  if (ITN > 0) {
+
+  dn0 <- case_when(ITN=='pyr' & resistance==0 ~ 0.387,
+                   ITN=='pyr' & resistance==0.4 ~ 0.352,
+                   ITN=='pyr' & resistance==0.8 ~ 0.270,
+                   ITN=='pbo' & resistance==0 ~ 0.517,
+                   ITN=='pbo' & resistance==0.4 ~ 0.494,
+                   ITN=='pbo' & resistance==0.8 ~ 0.419)
+
+  rn <- case_when(ITN=='pyr' & resistance==0 ~ 0.563,
+                  ITN=='pyr' & resistance==0.4 ~ 0.568,
+                  ITN=='pyr' & resistance==0.8 ~ 0.626,
+                  ITN=='pbo' & resistance==0 ~ 0.474,
+                  ITN=='pbo' & resistance==0.4 ~ 0.493,
+                  ITN=='pbo' & resistance==0.8 ~ 0.525)
+
+  gamman <- case_when(ITN=='pyr' & resistance==0 ~ 2.64,
+                      ITN=='pyr' & resistance==0.4 ~ 2.226,
+                      ITN=='pyr' & resistance==0.8 ~ 1.616,
+                      ITN=='pbo' & resistance==0 ~ 2.64,
+                      ITN=='pbo' & resistance==0.4 ~ 2.160,
+                      ITN=='pbo' & resistance==0.8 ~ 1.311)
+
+  if (ITNuse > 0) {
   params <- set_bednets(
     parameters = params,
     timesteps = seq(1, sim_length, year),
-    coverages = rep(ITN, sim_length/year),
+    coverages = rep(ITNuse, sim_length/year),
     retention = 3 * year,
-    dn0 = matrix(c(rep(.39, sim_length/year),
-                   rep(.39, sim_length/year),
-                   rep(.39, sim_length/year)),
+    dn0 = matrix(c(rep(dn0, sim_length/year),
+                   rep(dn0, sim_length/year),
+                   rep(dn0, sim_length/year)),
                  nrow=sim_length/year, ncol=3),
-    rn = matrix(c(rep(.56, sim_length/year),
-                  rep(.56, sim_length/year),
-                  rep(.56, sim_length/year)),
+    rn = matrix(c(rep(rn, sim_length/year),
+                  rep(rn, sim_length/year),
+                  rep(rn, sim_length/year)),
                 nrow=sim_length/year, ncol=3),
     rnm = matrix(c(rep(.24, sim_length/year),
                    rep(.24, sim_length/year),
                    rep(.24, sim_length/year)),
                  nrow=sim_length/year, ncol=3),
-    gamman = rep(2.64 * 365, sim_length/year)
+    gamman = rep(gamman * 365, sim_length/year)
   )  }
 
   # IRS ----------
@@ -228,6 +253,8 @@ runsimGF <- function(population,        # simulation population
            seasonality = seas_name,
            speciesprop = paste(speciesprop, sep = ',', collapse = ''),
            ITN = ITN,
+           ITNuse = ITNuse,
+           resistance,
            IRS = IRS,
            treatment = treatment,
            SMC = SMC,
@@ -242,14 +269,18 @@ runsimGF <- function(population,        # simulation population
            month = ceiling(timestep/month)) %>%
     # only necessary variables
     dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-                  ITN, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
+                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
                   starts_with("n_rtss"), starts_with("p_inc"), starts_with("n_inc"), starts_with("n_detect"),
                   starts_with("p_detect"), starts_with("n_"), -n_bitten, -n_treated, -n_infections) %>%
+
     # take means of populations and sums of cases by month
     group_by(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-             ITN, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
+             ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
     mutate_at(vars(n_0_1825:n_36500_73000), mean, na.rm = TRUE) %>%
-    mutate_at(vars(n_inc_severe_0_1825:n_inc_36500_73000), sum, na.rm = TRUE) %>%
+    mutate_at(vars(n_inc_severe_0_1825:n_inc_clinical_36500_73000), sum, na.rm = TRUE) %>%
+    dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  n_0_1825:n_36500_73000, n_inc_severe_0_1825:n_inc_clinical_36500_73000) %>%
     distinct()
 
  # save output ----------

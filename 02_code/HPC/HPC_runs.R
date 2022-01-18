@@ -5,6 +5,8 @@ setwd('M:/Hillary/GF-RTSS-CE')
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
 
+source('./02_code/HPC/functions.R')
+
 # remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
@@ -64,7 +66,9 @@ warmup <- 5*year
 sim_length <- 20*year
 
 # interventions
-ITN <- c(0,0.25,0.50,0.75)
+ITN <- c('pyr', 'pbo')
+ITNuse <- c(0,0.25,0.50,0.75)
+resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
 treatment <- c(0.45)
 SMC <- c(0,0.85)
@@ -73,11 +77,12 @@ RTSScov <- c(0,0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46% f
 fifth <- c(0) # one booster for now
 
 interventions <-
-  crossing(ITN, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
+  crossing(ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
   filter(!(RTSS=="none" & RTSScov >0)) %>%                # can't have coverage when no RTSS
   filter(!(RTSScov==0 & (RTSS=="EPI" | RTSS=='SV' | RTSS=="hybrid"))) %>%  # can't have 0 coverage with RTSS
   filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none'))) %>%  # can't have fifth doses with EPI or none
-  filter(!(SMC>0 & (seas_name=="seasonal" | seas_name=="perennial"))) # only administer SMC in highly seasonal settings
+  filter(!(SMC>0 & (seas_name=="seasonal" | seas_name=="perennial"))) %>% # only administer SMC in highly seasonal settings
+  filter(!(ITNuse==0 & resistance !=0)) # can't have resistance levels when ITNuse= 0
 
 name <- "test"
 
@@ -93,7 +98,9 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
          warmup,            # warm-up period
          sim_length,        # length of simulation run
          speciesprop,       # proportion of each vector species
-         ITN,               # ITN coverage
+         ITN,               # ITN type - pyr, pbo
+         ITNuse,            # ITN coverage
+         resistance,        # resistance level - none 0, med 0.4, high 0.8
          IRS,               # IRS coverage
          treatment,         # treatment coverage
          SMC,               # SMC coverage
@@ -105,27 +112,32 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
 
 
 # Run tasks -------------------------------------------------------------------
+combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
+  mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
+  filter(exist==0) %>%
+  select(-f, -exist)
+
 t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
 
 
-# Still to add:
-# insecticide resistance - ask Ellie - we want insecticide resistance to be an option. none / med / high
-# new ITN types to try? - Ask Ellie if we would expect a big diff w/ PBO and IG2. If not a big difference, just choose one as a comparison example.
-
-test <- runsimGF(combo[[1,1]],
-                 combo[[1,2]],
-                 combo[[1,3]],
-                 combo[[1,4]],
-                 combo[[1,5]],
-                 combo[[1,6]],
-                 combo[[1,7]],
-                 combo[[1,8]],
-                 combo[[1,9]],
-                 combo[[1,10]],
-                 combo[[1,11]],
-                 combo[[1,12]],
-                 combo[[1,13]],
-                 combo[[1,14]],
-                 combo[[1,15]],
-                 combo[[1,16]])
+# test run
+x <- 4
+test <- runsimGF(population = combo[[x,1]],
+                 seasonality = combo[[x,2]],
+                 seas_name = combo[[x,3]],
+                 starting_EIR = combo[[x,4]],
+                 pfpr = combo[[x,5]],
+                 warmup = combo[[x,6]],
+                 sim_length = combo[[x,7]],
+                 speciesprop = combo[[x,8]],
+                 ITN = combo[[x,9]],
+                 ITNuse = combo[[x,10]],
+                 resistance = combo[[x,11]],
+                 IRS = combo[[x,12]],
+                 treatment = combo[[x,13]],
+                 SMC = combo[[x,14]],
+                 RTSS = combo[[x,15]],
+                 RTSScov = combo[[x,16]],
+                 fifth = combo[[x,17]],
+                 name = combo[[x,18]])

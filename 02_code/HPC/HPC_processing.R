@@ -8,18 +8,25 @@ files <- list.files(path = "M:/Hillary/GF-RTSS-CE/03_output/HPC/", pattern = "*.
 dat_list <- lapply(files, function (x) readRDS(x))
 dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
 
-saveRDS(dat,"M:/Hillary/GF-RTSS-CE/03_output/rtss_raw.rds")
-
-rowwise() %>%
+# add vaccine doses
+dat <- dat %>% rowwise() %>%
   mutate(dose1 = case_when(RTSS=="none" ~ 0,
                            RTSS=="EPI" ~ n_rtss_epi_dose_1,
                            RTSS=="SV" ~ n_rtss_mass_dose_1),
          dose2 = case_when(RTSS=="none" ~ 0,
-                           RTSS=="EPI" ~ n_rtss_epi_dose_2,na.rm=T,
-                           RTSS=="SV" ~ n_rtss_mass_dose_2,na.rm=T),
+                           RTSS=="EPI" ~ n_rtss_epi_dose_2,
+                           RTSS=="SV" ~ n_rtss_mass_dose_2),
          dose3 = case_when(RTSS=="none" ~ 0,
-                           RTSS=="EPI" ~ n_rtss_epi_dose_3,na.rm=T,
-                           RTSS=="SV" ~ n_rtss_mass_dose_3,na.rm=T),
+                           RTSS=="EPI" ~ n_rtss_epi_dose_3,
+                           RTSS=="SV" ~ n_rtss_mass_dose_3),
          dose4 = case_when(RTSS=="none" ~ 0,
-                           RTSS=="EPI" ~ n_rtss_epi_booster_1,na.rm=T,
-                           RTSS=="SV" ~ n_rtss_mass_booster_1,na.rm=T)) %>%
+                           RTSS=="EPI" ~ n_rtss_epi_booster_1,
+                           RTSS=="SV" ~ n_rtss_mass_booster_1)) %>% ungroup()
+
+# preview
+View(dat[1:1000,c('n_rtss_epi_dose_1', 'n_rtss_mass_booster_1', 'dose1', 'dose4')])
+
+# save
+saveRDS(dat,"M:/Hillary/GF-RTSS-CE/03_output/rtss_raw.rds")
+
+
