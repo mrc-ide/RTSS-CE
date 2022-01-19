@@ -1,24 +1,17 @@
 # Set-up ----------------------------------------------------------------------
 library(didehpc)
-setwd('M:/Hillary/rtss_malariasimulation')
-# remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
-source('./1_functions.R')
+setwd('M:/Hillary/GF-RTSS-CE')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
 
-didehpc::didehpc_config()
-didehpc::web_login()
+source('./02_code/HPC/functions.R')
 
-root <- "context"
+# remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
+src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
-sources <- c('./1_functions.R')
-
-# src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
-src <- conan::conan_sources("github::mrc-ide/malariasimulation@feat/demography")
-
-ctx <- context::context_save(root,
-                             sources = sources,
+ctx <- context::context_save(path = "M:/Hillary/contexts",
+                             sources = c('./02_code/HPC/functions.R'),
                              packages = c("tidyverse", "malariasimulation"),
                              package_sources = src)
 
@@ -33,308 +26,118 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 
 
 # Now set up your job ---------------------------------------------------------
+library(tidyverse)
 year <- 365
-month <- year/12
-warmup <- 20 * year
-sim_length <- 15 * year
-human_population <- 100000
 
-# highly seasonal parameters
-high_seas <- get_parameters(list(
-  human_population = human_population,
-  # average_age = 8453.323, # to match flat_demog
-  model_seasonality = TRUE,
-  g0 = 0.284596,
-  g = c(-0.317878, -0.0017527, 0.116455),
-  h = c(-0.331361, 0.293128, -0.0617547),
-  incidence_rendering_min_ages = 0,
-  incidence_rendering_max_ages = 100 * year,
-  clinical_incidence_rendering_min_ages = 0,
-  clinical_incidence_rendering_max_ages = 100 * year,
-  severe_incidence_rendering_min_ages = c(0,0,25)*year,
-  severe_incidence_rendering_max_ages = c(100,5,50)*year,
-  individual_mosquitoes = FALSE))
+# population
+population <- 10000
 
-# set flat demography to match Haley's:
-# https://github.com/ht1212/seasonal_use_case/blob/main/Part_1/2_model_function.R#L44
-flat_demog <- read.table('./Flat_demog.txt') # from mlgts
-ages <- round(flat_demog$V3 * year) # top of age bracket
-deathrates <- flat_demog$V5 / 365 # age-specific death rates
+# seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
+# drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
+# g0 = a0, a = g, b = h
+pfpr <- c(10,30,60) # start at 10% (min rec for RTSS use)
 
-high_seas <- set_demography(
-  high_seas,
-  agegroups = ages,
-  timesteps = 1,
-  deathrates = matrix(deathrates, nrow = 1),
-  birthrates = find_birthrates(human_population, ages, deathrates)
-)
+  # FIRST
+  seas_name <- 'highly seasonal'
+  seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
+  starting_EIR <- c(2.31, 14.3, 100)
+  s1 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
-# seasonal parameters
-low_seas <- get_parameters(list(
-  human_population = human_population,
-  # average_age = 8453.323, # to match flat_demog
-  model_seasonality = TRUE,
-  g0 = 0.285505,
-  g = c(-0.325352, -0.0109352, 0.0779865),
-  h = c(-0.132815, 0.104675, -0.013919),
-  incidence_rendering_min_ages = 0,
-  incidence_rendering_max_ages = 100 * year,
-  clinical_incidence_rendering_min_ages = 0,
-  clinical_incidence_rendering_max_ages = 100 * year,
-  severe_incidence_rendering_min_ages = c(0,0,25)*year,
-  severe_incidence_rendering_max_ages = c(100,5,50)*year,
-  individual_mosquitoes = FALSE))
+  # SECOND
+  seas_name <- 'seasonal'
+  seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
+  starting_EIR <- c(1.81, 11.1, 90.5)
+  s2 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
-low_seas <- set_demography(
-  low_seas,
-  agegroups = ages,
-  timesteps = 1,
-  deathrates = matrix(deathrates, nrow = 1),
-  birthrates = find_birthrates(human_population, ages, deathrates)
-)
+  # THIRD
+  seas_name <- 'perennial'
+  seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
+  starting_EIR <- c(1.51, 8.52, 55.1)
+  s3 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
-params <- tibble(params=rep(list(high_seas,high_seas,high_seas,high_seas,
-                                 low_seas,low_seas,low_seas,low_seas)))
-season <- c(rep('high_seas',4), rep('low_seas',4))
+stable <- rbind(s1, s2, s3)
 
-# calculate from '2_PfPR_match_eir.R'
-# EIR_high <- c(1.1, 4.7, 10.1, 38.2) # malariasimulation, individual_mosquitoes=T
-# EIR_low <- c(1.2, 4.0, 8.7, 32.6) # malariasimulation, individual_mosquitoes=T
-# EIR_high <- c(1.61, 6.92, 13.7, 52.3) # malariasimulation, individual_mosquitoes=F
-# EIR_low <- c(1.51, 6.12, 12.1, 44.1) # malariasimulation, individual_mosquitoes=F
-EIR_high <- c(1.91, 7.62, 15.5, 57.7) # malariasimulation, individual_mosquitoes=F, w/ demography
-EIR_low <- c(1.71, 6.82, 13.4, 49.9) # malariasimulation, individual_mosquitoes=F, w/ demography
+# vectors: list(arab_params, fun_params, gamb_params)
+speciesprop <- data.frame(speciesprop = rbind(list(c(0.25,0.25,0.5))),
+                          row.names = NULL)
 
-starting_EIR <- c(EIR_high, EIR_low)
+# run time
+warmup <- 5*year
+sim_length <- 20*year
 
-combo <- cbind(params, warmup, sim_length, starting_EIR, season)
+# interventions
+ITN <- c('pyr', 'pbo')
+ITNuse <- c(0,0.25,0.50,0.75)
+resistance <- c(0, 0.4, 0.8)
+IRS <-  c(0)
+treatment <- c(0.45)
+SMC <- c(0,0.85)
+RTSS <- c("none", "EPI", "SV") # leave out hybrid for now
+RTSScov <- c(0,0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46% first half of 2021
+fifth <- c(0) # one booster for now
 
-combo
+interventions <-
+  crossing(ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
+  filter(!(RTSS=="none" & RTSScov >0)) %>%                # can't have coverage when no RTSS
+  filter(!(RTSScov==0 & (RTSS=="EPI" | RTSS=='SV' | RTSS=="hybrid"))) %>%  # can't have 0 coverage with RTSS
+  filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none'))) %>%  # can't have fifth doses with EPI or none
+  filter(!(SMC>0 & (seas_name=="seasonal" | seas_name=="perennial"))) %>% # only administer SMC in highly seasonal settings
+  filter(!(ITNuse==0 & resistance !=0)) # can't have resistance levels when ITNuse= 0
+
+name <- "test"
+
+# COMBINE into all combinations of runs
+combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
+  mutate(name = paste0(name, "_", row_number())) %>%
+  # put into correct order of function arguments
+  select(population,        # simulation population
+         seasonality,       # seasonal profile
+         seas_name,         # name of seasonal profile
+         starting_EIR,      # equilibrium EIR
+         pfpr,              # corresponding PfPR
+         warmup,            # warm-up period
+         sim_length,        # length of simulation run
+         speciesprop,       # proportion of each vector species
+         ITN,               # ITN type - pyr, pbo
+         ITNuse,            # ITN coverage
+         resistance,        # resistance level - none 0, med 0.4, high 0.8
+         IRS,               # IRS coverage
+         treatment,         # treatment coverage
+         SMC,               # SMC coverage
+         RTSS,              # RTS,S strategy
+         RTSScov,           # RTS,S coverage
+         fifth,             # status of 5th dose for SV or hybrid strategies
+         name               # name of output file
+  ) %>% as.data.frame()
+
 
 # Run tasks -------------------------------------------------------------------
-# NO INTERVENTION
-t <- obj$enqueue_bulk(combo, runsim_none)
-t$status()
+combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
+  mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
+  filter(exist==0) %>%
+  select(-f, -exist)
 
-# EPI alone
-t <- obj$enqueue_bulk(combo, runsim_epi)
-t$status()
-
-# SV4
-boosters <- round(12*month+2*month)
-booster_coverage <- rep(.80, 1)
-rtss_cs_boost <- 5.56277
-name <- 'SV4_'
-
-combo2 <- combo %>% cbind(boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SV)
-t$status()
-
-# SV4 updated
-boosters <- round(12*month+2*month)
-booster_coverage <- rep(.80, 1)
-rtss_cs_boost <- 6.37008
-name <- 'SV4updated_'
-
-combo2 <- combo %>% cbind(boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SV)
-t$status()
-
-# SV5
-boosters <- tibble(boosters = list(round(c(12*month+2*month, 24*month+2*month))))
-booster_coverage <- tibble(booster_coverage = list(rep(.80, 2)))
-rtss_cs_boost <- 5.56277
-name <- 'SV5_'
-
-combo2 <- combo %>% cbind(boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SV)
-t$status()
-
-# SV5 updated
-boosters <- tibble(boosters = list(round(c(12*month+2*month, 24*month+2*month))))
-booster_coverage <- tibble(booster_coverage = list(rep(.80, 2)))
-rtss_cs_boost <- 6.37008
-name <- 'SV5updated_'
-
-combo2 <- combo %>% cbind(boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SV)
-t$status()
-
-# SMC alone
-shape <- 3.67
-scale <- 41.48
-name <- 'SMCalone_'
-
-combo2 <- combo %>% cbind(shape, scale, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMC)
-t$status()
-
-# EPI + SMC
-shape <- 3.67
-scale <- 41.48
-name <- 'SMCEPI_'
-
-combo2 <- combo %>% cbind(shape, scale, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCEPI)
-t$status()
-
-# SV4 + SMC
-shape <- 3.67
-scale <- 41.48
-boosters <- round(12*month+2)
-booster_coverage <- rep(.80, 1)
-rtss_cs_boost <- 5.56277
-name <- 'SV4SMC_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
-t$status()
-
-# SV5 + SMC
-shape <- 3.67
-scale <- 41.48
-boosters <- tibble(boosters = list(round(c(12*month+2*month, 24*month+2*month))))
-booster_coverage <- tibble(booster_coverage = list(rep(.80, 2)))
-rtss_cs_boost <- 5.56277
-name <- 'SV5SMC_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
-t$status()
-
-# SV4 updated + SMC
-shape <- 3.67
-scale <- 41.48
-boosters <- round(12*month+2*month)
-booster_coverage <- rep(.80, 1)
-rtss_cs_boost <- 6.37008
-name <- 'SV4updatedSMC_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
-t$status()
-
-# SV5 updated + SMC
-shape <- 3.67
-scale <- 41.48
-boosters <- tibble(boosters = list(round(c(12*month+2*month, 24*month+2*month))))
-booster_coverage <- tibble(booster_coverage = list(rep(.80, 2)))
-rtss_cs_boost <- 6.37008
-name <- 'SV5updatedSMC_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
-t$status()
-
-# SV4 synergy + SMC
-shape <- 2.955348
-scale <- 58.99686
-boosters <- round(12*month+2*month)
-booster_coverage <- rep(.80, 1)
-rtss_cs_boost <- 6.37008
-name <- 'SV4SMCsynergy_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
-t$status()
-
-# SV5 synergy + SMC
-shape <- 2.955348
-scale <- 58.99686
-boosters <- tibble(boosters = list(round(c(12*month+2*month, 24*month+2*month))))
-booster_coverage <- tibble(booster_coverage = list(rep(.80, 2)))
-rtss_cs_boost <- 6.37008
-name <- 'SV5SMCsynergy_'
-
-combo2 <- combo %>% cbind(shape, scale, boosters, booster_coverage, rtss_cs_boost, name)
-
-t <- obj$enqueue_bulk(combo2, runsim_SMCSV)
+t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
 
 
-# Process data ----------------------------------------------------------------
-# read in files
-require(data.table)
-library(tidyverse)
-
-# rename HPC folder to 'HPC_XX' - check to make sure you are pulling files from the correct folder to process.
-
-files <- list.files(path = "M:/Hillary/rtss_malariasimulation/rds/HPC", pattern = "*.rds", full.names = TRUE)
-dat_list <- lapply(files, function (x) data.table(readRDS(x)))
-
-dat <- rbindlist(dat_list, fill = TRUE, idcol="file") %>%
-  mutate(file = files[file],
-         file = gsub("M:/Hillary/rtss_malariasimulation/rds/HPC/","",file),
-         intervention = case_when(grepl('EPIalone',file)~"EPI",
-                                  grepl('SV4_',file)~"SV 4-dose",
-                                  grepl('SV5_',file)~"SV 5-dose",
-                                  grepl('SV4updated_',file)~"SV 4-dose - updated booster",
-                                  grepl('SV5updated_',file)~"SV 5-dose - updated booster",
-                                  grepl('SMCEPI_',file)~"EPI + SMC",
-                                  grepl('SV4SMC_',file)~"SV 4-dose + SMC",
-                                  grepl('SV5SMC_',file)~"SV 5-dose + SMC",
-                                  grepl('SV4updatedSMC',file)~"SV 4-dose - updated booster + SMC",
-                                  grepl('SV5updatedSMC',file)~"SV 5-dose - updated booster + SMC",
-                                  grepl('SV4SMCsynergy',file)~"SV 4-dose synergy + SMC",
-                                  grepl('SV5SMCsynergy',file)~"SV 5-dose synergy + SMC",
-                                  grepl('SMCalone',file)~"SMC alone",
-                                  grepl('none',file)~"none"),
-         season = case_when(model=='high_seas'~"highly_seasonal",
-                            model=='low_seas'~"seasonal"))
-
-saveRDS(dat,"C:/Users/htopazia/OneDrive - Imperial College London/Github/rtss_malariasimulation/rds/rtss_smc_raw.rds")
-#saveRDS(dat,"C:/Users/htopazia/OneDrive - Imperial College London/Github/rtss_malariasimulation/rds/severe_test.rds")
-
-summary(dat$n_0_36500)
-
-dat2 <- dat %>%
-  mutate(cases = (n_inc_clinical_0_36500/n_0_36500) * human_population,
-         n = n_0_36500,
-         cases_p = (p_inc_clinical_0_36500/n_0_36500) * human_population,
-         severe = (n_inc_severe_0_36500/n_0_36500) * human_population,
-         severe_p = (p_inc_severe_0_36500/n_0_36500) * human_population,
-         deaths = 0.215 * (n_inc_severe_0_36500/n_0_36500) * human_population,
-         deaths_p = 0.215 * (p_inc_severe_0_36500/n_0_36500) * human_population) %>%
-  rowwise() %>%
-  mutate(dose1 = sum(n_rtss_epi_dose_1,n_rtss_mass_dose_1,na.rm=T),
-         dose2 = sum(n_rtss_epi_dose_2,n_rtss_mass_dose_2,na.rm=T),
-         dose3 = sum(n_rtss_epi_dose_3,n_rtss_mass_dose_3,na.rm=T),
-         dose4 = sum(n_rtss_epi_booster_1,n_rtss_mass_booster_1,na.rm=T),
-         dose5 = sum(n_rtss_mass_booster_2,na.rm=T),
-         dosecomplete = dose3) %>%
-  ungroup()
-
-saveRDS(dat2,"C:/Users/htopazia/OneDrive - Imperial College London/Github/rtss_malariasimulation/rds/rtss_smc_all.rds")
-
-none <- dat2 %>% filter(intervention == 'none') %>%
-  rename(base_case = cases,
-         base_n = n_0_36500,
-         base_death = deaths) %>%
-  select(timestep, base_case, base_n, base_death, eir, season)
-
-dat3 <- dat2 %>% filter(intervention != 'none') %>% left_join(none) %>%
-  group_by(eir, season, intervention) %>%
-  summarize(base_case = sum(base_case, na.rm=T),
-            base_death = sum(base_death, na.rm=T),
-            dosecomplete = sum(dosecomplete, na.rm=T),
-            cases = sum(cases, na.rm=T),
-            pop = mean(n_0_36500, na.rm=T),
-            severe = sum(severe, na.rm=T),
-            deaths = sum(deaths, na.rm=T),
-            cases_averted = base_case - cases,
-            cases_averted_per_100000_fvp = (base_case - cases)/dosecomplete * human_population,
-            deaths_averted = base_death - deaths,
-            deaths_averted_per_100000_fvp = (base_death - deaths)/dosecomplete * human_population)
-
-saveRDS(dat3,"C:/Users/htopazia/OneDrive - Imperial College London/Github/rtss_malariasimulation/rds/rtss_smc_averted.rds")
+# test run
+# x <- 4
+# test <- runsimGF(population = combo[[x,1]],
+#                  seasonality = combo[[x,2]],
+#                  seas_name = combo[[x,3]],
+#                  starting_EIR = combo[[x,4]],
+#                  pfpr = combo[[x,5]],
+#                  warmup = combo[[x,6]],
+#                  sim_length = combo[[x,7]],
+#                  speciesprop = combo[[x,8]],
+#                  ITN = combo[[x,9]],
+#                  ITNuse = combo[[x,10]],
+#                  resistance = combo[[x,11]],
+#                  IRS = combo[[x,12]],
+#                  treatment = combo[[x,13]],
+#                  SMC = combo[[x,14]],
+#                  RTSS = combo[[x,15]],
+#                  RTSScov = combo[[x,16]],
+#                  fifth = combo[[x,17]],
+#                  name = combo[[x,18]])

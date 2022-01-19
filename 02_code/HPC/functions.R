@@ -1,332 +1,289 @@
-# plotting --------------------------------------------------------------------
-plotfun <- function(data,model){
-  data %>%
-    filter(model==model) %>%
-    mutate(month=floor(timestep/(365/12))) %>%
-    group_by(eir,month) %>%
-    summarize(inc_month=sum(n_inc_0_36500, na.rm=T)/n_0_36500) %>%
-    left_join(match, by="eir") %>%
 
-    ggplot() +
-    geom_line(aes(x=month, y=inc_month, color=as_factor(pfpr))) +
-    labs(x="Timesteps (month)",
-         y="Monthly \nclinical incidence \n(0-5 years)",
-         color=expression(PfPR[2-10]),
-         title=model) +
-    scale_y_continuous(limits=c(0,1.7),breaks=c(0,0.5,1,1.5)) +
-    theme_classic()
-}
+# set interventions and run malariasimulation ----------------------------------
 
-# no intervention -------------------------------------------------------------
-runsim_none <- function(params, starting_EIR, warmup, sim_length, season){
+runsimGF <- function(population,        # simulation population
+                     seasonality,       # seasonal profile
+                     seas_name,         # name of seasonal profile
+                     starting_EIR,      # equilibrium EIR
+                     pfpr,              # corresponding PfPR
+                     warmup,            # warm-up period
+                     sim_length,        # length of simulation run
+                     speciesprop,       # proportion of each vector species
+                     ITN,               # ITN type - pyr, pbo
+                     ITNuse,            # ITN coverage
+                     resistance,        # resistance level - none 0, med 0.4, high 0.8
+                     IRS,               # IRS coverage
+                     treatment,         # treatment coverage
+                     SMC,               # SMC coverage
+                     RTSS,              # RTS,S strategy
+                     RTSScov,           # RTS,S coverage
+                     fifth,             # status of 5th dose for SV or hybrid strategies
+                     name               # name of output file
+                     ){
+
   year <- 365
   month <- year/12
 
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
+  # get starting parameters ----------
+  params <- get_parameters(list(
+    human_population = population,
+    model_seasonality = TRUE,
+    # rainfall fourier parameters
+    g0 = unlist(seasonality)[1],
+    g = unlist(seasonality)[2:4],
+    h = unlist(seasonality)[5:7],
+    individual_mosquitoes = FALSE))
 
-  params <- set_drugs(params, list(AL_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
+  # outcome definitions ----------
+  params$clinical_incidence_rendering_min_ages = seq(0,100,5)*year
+  params$clinical_incidence_rendering_max_ages = c(seq(5,100,5),200)*year
+  params$severe_incidence_rendering_min_ages = seq(0,100,5)*year
+  params$severe_incidence_rendering_max_ages = c(seq(5,100,5),200)*year
 
-  saveRDS(output, paste0('./rds/HPC/none_',season,starting_EIR,'.rds'))
-}
+  # demography ----------
+  flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
+  ages <- round(flat_demog$V3 * year) # top of age bracket
+  deathrates <- flat_demog$V5 / 365 # age-specific death rates
 
-# EPI -------------------------------------------------------------------------
-runsim_epi <- function(params, starting_EIR, warmup, sim_length, season){
-  year <- 365
-  month <- year/12
+  params <- set_demography(
+    params,
+    agegroups = ages,
+    timesteps = 1,
+    deathrates = matrix(deathrates, nrow = 1),
+    birthrates = find_birthrates(population, ages, deathrates)
+  )
 
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
+  # vectors ----------
+  params <- set_species(
+    parameters = params,
+    species = list(arab_params, fun_params, gamb_params),
+    proportions = unlist(speciesprop))
 
-  params <- set_drugs(params, list(AL_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
+  # proportion of bites taken in bed for each species
+  # find values in S.I. of 10.1038/s41467-018-07357-w Table 3
+  params$phi_bednets <- c(0.9, 0.9, 0.89) # Hogan et al. 2020
+  # proportion of bites taken indoors for each species
+  params$phi_indoors <- c(0.96, 0.98, 0.97) # Hogan et al. 2020
 
+  # ITNs ----------
+  # find values in S.I. of 10.1038/s41467-018-07357-w
+  # or in Table S1.3 of Ellie's 2021 paper
+  # same value for all species
+
+  dn0 <- case_when(ITN=='pyr' & resistance==0 ~ 0.387,
+                   ITN=='pyr' & resistance==0.4 ~ 0.352,
+                   ITN=='pyr' & resistance==0.8 ~ 0.270,
+                   ITN=='pbo' & resistance==0 ~ 0.517,
+                   ITN=='pbo' & resistance==0.4 ~ 0.494,
+                   ITN=='pbo' & resistance==0.8 ~ 0.419)
+
+  rn <- case_when(ITN=='pyr' & resistance==0 ~ 0.563,
+                  ITN=='pyr' & resistance==0.4 ~ 0.568,
+                  ITN=='pyr' & resistance==0.8 ~ 0.626,
+                  ITN=='pbo' & resistance==0 ~ 0.474,
+                  ITN=='pbo' & resistance==0.4 ~ 0.493,
+                  ITN=='pbo' & resistance==0.8 ~ 0.525)
+
+  gamman <- case_when(ITN=='pyr' & resistance==0 ~ 2.64,
+                      ITN=='pyr' & resistance==0.4 ~ 2.226,
+                      ITN=='pyr' & resistance==0.8 ~ 1.616,
+                      ITN=='pbo' & resistance==0 ~ 2.64,
+                      ITN=='pbo' & resistance==0.4 ~ 2.160,
+                      ITN=='pbo' & resistance==0.8 ~ 1.311)
+
+  if (ITNuse > 0) {
+  params <- set_bednets(
+    parameters = params,
+    timesteps = seq(1, sim_length, year),
+    coverages = rep(ITNuse, sim_length/year),
+    retention = 3 * year,
+    dn0 = matrix(c(rep(dn0, sim_length/year),
+                   rep(dn0, sim_length/year),
+                   rep(dn0, sim_length/year)),
+                 nrow=sim_length/year, ncol=3),
+    rn = matrix(c(rep(rn, sim_length/year),
+                  rep(rn, sim_length/year),
+                  rep(rn, sim_length/year)),
+                nrow=sim_length/year, ncol=3),
+    rnm = matrix(c(rep(.24, sim_length/year),
+                   rep(.24, sim_length/year),
+                   rep(.24, sim_length/year)),
+                 nrow=sim_length/year, ncol=3),
+    gamman = rep(gamman * 365, sim_length/year)
+  )  }
+
+  # IRS ----------
+  # find values in S.I. of 10.1038/s41467-018-07357-w Table 3
+  if (IRS > 0) {
+  params <- set_spraying(
+    parameters = params,
+    timesteps = seq(1, sim_length, year),
+    coverages = rep(IRS, sim_length/year),
+    ls_theta = matrix(c(rep(2.025, sim_length/year),
+                        rep(2.025, sim_length/year),
+                        rep(2.025, sim_length/year)),
+                     nrow=sim_length/year, ncol=3),
+    ls_gamma = matrix(c(rep(-0.009, sim_length/year),
+                        rep(-0.009, sim_length/year),
+                        rep(-0.009, sim_length/year)),
+                      nrow=sim_length/year, ncol=3),
+    ks_theta = matrix(c(rep(-2.222, sim_length/year),
+                        rep(-2.222, sim_length/year),
+                        rep(-2.222, sim_length/year)),
+                      nrow=sim_length/year, ncol=3),
+    ks_gamma = matrix(c(rep(0.008, sim_length/year),
+                        rep(0.008, sim_length/year),
+                        rep(0.008, sim_length/year)),
+                      nrow=sim_length/year, ncol=3),
+    ms_theta = matrix(c(rep(-1.232, sim_length/year),
+                        rep(-1.232, sim_length/year),
+                        rep(-1.232, sim_length/year)),
+                      nrow=sim_length/year, ncol=3),
+    ms_gamma = matrix(c(rep(-0.009, sim_length/year),
+                        rep(-0.009, sim_length/year),
+                        rep(-0.009, sim_length/year)),
+                      nrow=sim_length/year, ncol=3)
+  )  }
+
+  # treatment ----------
+  if (treatment > 0) {
+  params <- set_drugs(
+    parameters = params,
+    list(AL_params, SP_AQ_params))
+
+  params <- set_clinical_treatment(
+    parameters = params,
+    drug = 1,
+    timesteps = c(1),
+    coverages = c(treatment)
+  )  }
+
+  # SMC ----------
+  if (SMC > 0) {
+    peak <- peak_season_offset(params)
+    first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0) # check this to see where these rounds fall on the seasonal settings - if it doesn't cover the whole season in the low seasonality setting, we may need to add another round. Or have one SMC 4 rounds and one SMC 5 rounds and see if the additional round makes a difference.
+    firststeps <- sort(rep(first, sim_length/year))
+    yearsteps <- rep(c(0, seq(year, sim_length - year, year)), sim_length/year)
+    timesteps <- yearsteps + firststeps
+
+    params <- set_drugs(
+      parameters = params,
+      list(AL_params, SP_AQ_params))
+
+    params <- set_smc(
+      parameters = params,
+      drug = 2,
+      timesteps = sort(timesteps),
+      coverages = rep(SMC, length(timesteps)),
+      min_age = round(0.5*year),
+      max_age = round(5*year))
+  }
+
+  # EPI ----------
+  if (RTSS == "EPI") {
   params$rtss_doses <- round(c(0,1.5*month,3*month))
   boosters <- round(c(18*month))
 
   params <- set_rtss_epi(
-    params,
+    parameters = params,
     start = warmup,
     end = warmup + sim_length,
-    coverage = 0.8,
+    coverage = RTSScov,
     age = round(6*month),
     min_wait = 0,
     boosters = boosters,
     booster_coverage = rep(.80, 1),
-    seasonal_boosters = FALSE)
+    seasonal_boosters = FALSE
+  )  }
 
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/HPC/EPIalone_',season,starting_EIR,'.rds'))
-}
-
-# SV -------------------------------------------------------------------------
-runsim_SV <- function(params, starting_EIR, warmup, sim_length, season, boosters, booster_coverage, rtss_cs_boost, name){
-  year <- 365
-  month <- year/12
-
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
-
-  params <- set_drugs(params, list(AL_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-
+  # SV ----------
+  if (RTSS == "SV") {
   peak <- peak_season_offset(params)
-  first <- ifelse(season=='high_seas', round(warmup+(peak-month*3.5),0), round(warmup+(peak-month*5.5),0))
-  timesteps <- c(first, first+seq(1:14)*year)
+  first <- round(warmup+(peak-month*3.5),0)
+  timesteps <- c(first, first+seq(year, sim_length, year))
   params$rtss_doses <- round(c(0,1*month,2*month))
-  params$rtss_cs_boost <- c(rtss_cs_boost, 0.35)
+
+  boosters <- if(fifth==0) round(c(12*month+2*month)) else round(c(12*month+2*month, 24*month+2*month))
 
   params <- set_mass_rtss(
-    params,
+    parameters = params,
     timesteps = timesteps,
-    coverages = rep(0.8,length(timesteps)),
+    coverages = rep(RTSScov,length(timesteps)),
     min_ages = round(5*month),
     max_ages = round(17*month),
-    min_wait = 0,
-    boosters = as.vector(unlist(boosters)),
-    booster_coverage = as.vector(unlist(booster_coverage)))
-
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/HPC/',name,season,starting_EIR,'.rds'))
-}
-
-# SMC -------------------------------------------------------------------------
-runsim_SMC <- function(params, starting_EIR, warmup, sim_length, season, shape, scale, name){
-  year <- 365
-  month <- year/12
-
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
-
-  params <- set_drugs(params, list(AL_params, SP_AQ_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-
-  peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0)
-  timesteps <- c(c(0,seq(1:14))*year + rep(first,15))
-
-  params <- set_smc(
-    params,
-    drug = 2,
-    timesteps = sort(timesteps),
-    coverages = rep(0.75, length(timesteps)),
-    min_age = round(0.25*year),
-    max_age = round(5*year))
-
-  params$drug_prophylaxis_shape <- c(11.3, shape)
-  params$drug_prophylaxis_scale <- c(10.6, scale)
-
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/HPC/',name,season,starting_EIR,'.rds'))
-}
-
-# SMC + EPI -------------------------------------------------------------------
-runsim_SMCEPI <- function(params, starting_EIR, warmup, sim_length, season, shape, scale, name){
-  year <- 365
-  month <- year/12
-
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
-
-  params <- set_drugs(params, list(AL_params, SP_AQ_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-
-  peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0)
-  timesteps <- c(c(0,seq(1:14))*year + rep(first,15))
-
-  params <- set_smc(
-    params,
-    drug = 2,
-    timesteps = sort(timesteps),
-    coverages = rep(0.75,length(timesteps)),
-    min_age = round(0.25*year),
-    max_age = round(5*year))
-
-  params$drug_prophylaxis_shape <- c(11.3, shape)
-  params$drug_prophylaxis_scale <- c(10.6, scale)
-
-  params$rtss_doses <- round(c(0,1.5*month,3*month))
-  boosters <- round(c(18*month))
-
-  params <- set_rtss_epi(
-    params,
-    start = warmup,
-    end = warmup + sim_length,
-    coverage = 0.8,
-    age = round(6*month),
     min_wait = 0,
     boosters = boosters,
-    booster_coverage = rep(.80, 1),
-    seasonal_boosters = FALSE)
+    booster_coverage = rep(.80, length(boosters)))
+  }
 
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/HPC/',name,season,starting_EIR,'.rds'))
-}
-
-# SMC + SV --------------------------------------------------------------------
-runsim_SMCSV <- function(params, starting_EIR, warmup, sim_length, season, shape, scale, boosters, booster_coverage, rtss_cs_boost, name){
-  year <- 365
-  month <- year/12
-
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
-
-  params <- set_drugs(params, list(AL_params, SP_AQ_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-
-  params$drug_prophylaxis_shape <- c(11.3, shape)
-  params$drug_prophylaxis_scale <- c(10.6, scale)
-
-  peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0)
-  timesteps <- c(c(0,seq(1:14))*year + rep(first,15))
-
-  params <- set_smc(
-    params,
-    drug = 2,
-    timesteps = sort(timesteps),
-    coverages = rep(0.75,length(timesteps)),
-    min_age = round(0.25*year),
-    max_age = round(5*year))
-
-  peak <- peak_season_offset(params)
-  first <- ifelse(season=='high_seas', round(warmup+(peak-month*3.5),0), round(warmup+(peak-month*5.5),0))
-  timesteps <- c(first, first+seq(1:14)*year)
-  params$rtss_doses <- round(c(0,1*month,2*month))
-  params$rtss_cs_boost <- c(rtss_cs_boost, 0.35)
-
-  params <- set_mass_rtss(
-    params,
-    timesteps = timesteps,
-    coverages = rep(0.8,length(timesteps)),
-    min_ages = round(5*month),
-    max_ages = round(17*month),
-    min_wait = 0,
-    boosters = as.vector(unlist(boosters)),
-    booster_coverage = as.vector(unlist(booster_coverage)))
-
-  params$rtss_vmax <- if(name %in% c('SV4SMCsynergy_', 'SV5SMCsynergy_')) 0.911028 else .93
-  params$rtss_alpha <- if(name %in% c('SV4SMCsynergy_', 'SV5SMCsynergy_')) 0.75303 else .74
-  params$rtss_beta <- if(name %in% c('SV4SMCsynergy_', 'SV5SMCsynergy_')) 62.8525 else 99.4
-
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/HPC/',name,season,starting_EIR,'.rds'))
-}
-
-
-# HYBRID --------------------------------------------------------------------
-runsim_hybrid <- function(params, minwait, starting_EIR, warmup, sim_length, season, fifth){
-  year <- 365
-  month <- year/12
-
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
-
-  params <- set_drugs(params, list(AL_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-
+  # hybrid ----------
+  if (RTSS == "hybrid") {
   params$rtss_doses <- round(c(0,1.5*month,3*month))
 
   peak <- peak_season_offset(params)
-  first <- ifelse(season=='high_seas', round((peak-month*3.5),0), round((peak-month*5.5),0))
-  boosters <- if(fifth==0) c(first+3*month) else ((first+3*month) + c(0, year))
+  first <- round(warmup+(peak-month*3.5),0)
+  boosters <- if(fifth==0) round(c(first+3*month),0) else round(((first+3*month) + c(0, year)),0)
 
   params <- set_rtss_epi(
-    params,
+    parameters = params,
     start = warmup,
     end = warmup + sim_length,
-    coverage = 0.8,
+    coverage = RTSScov,
     age = round(6*month),
-    min_wait = minwait,
+    min_wait = 0,
     boosters = boosters,
     booster_coverage = rep(.80, length(boosters)),
     seasonal_boosters = TRUE)
+  }
 
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           minwait=minwait,
-           timestep=timestep-warmup,
-           model=season,
-           fifth=fifth) %>%
-    filter(timestep > 0)
+  # EIR equilibrium ----------
+  params <- set_equilibrium(params, as.numeric(starting_EIR))
 
-  saveRDS(output, paste0('./rds/HPC/hybrid_',minwait,'wait_',season,starting_EIR,'_',fifth,'.rds'))
-}
+  # run simulation ----------
+  output <- run_simulation(
+    timesteps = warmup + sim_length,
+    parameters = params,
+    correlations = NULL) %>%
+    # add vars to output
+    mutate(EIR = starting_EIR,
+           warmup = warmup,
+           sim_length = sim_length,
+           pfpr = pfpr,
+           timestep = timestep - warmup,
+           seasonality = seas_name,
+           speciesprop = paste(speciesprop, sep = ',', collapse = ''),
+           ITN = ITN,
+           ITNuse = ITNuse,
+           resistance,
+           IRS = IRS,
+           treatment = treatment,
+           SMC = SMC,
+           RTSS = RTSS,
+           RTSScov = RTSScov,
+           fifth = fifth) %>%
+    ungroup() %>%
+    filter(timestep > 0) %>% # remove warmup period
 
-# SEVERE age breakdown -------------------------------------------------------------
-runsim_severe <- function(params, starting_EIR, warmup, sim_length, season){
-  year <- 365
-  month <- year/12
+    # statistics by month
+    mutate(year = ceiling(timestep/year),
+           month = ceiling(timestep/month)) %>%
+    # only necessary variables
+    dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
+                  starts_with("n_rtss"), starts_with("p_inc"), starts_with("n_inc"), starts_with("n_detect"),
+                  starts_with("p_detect"), starts_with("n_"), -n_bitten, -n_treated, -n_infections) %>%
 
-  params$severe_incidence_rendering_min_ages = seq(0,99,1)*year
-  params$severe_incidence_rendering_max_ages = seq(1,100,1)*year
+    # take means of populations and sums of cases by month
+    group_by(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+             ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth) %>%
+    mutate_at(vars(n_0_1825:n_36500_73000), mean, na.rm = TRUE) %>%
+    mutate_at(vars(n_inc_severe_0_1825:n_inc_clinical_36500_73000), sum, na.rm = TRUE) %>%
+    dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  n_0_1825:n_36500_73000, n_inc_severe_0_1825:n_inc_clinical_36500_73000) %>%
+    distinct()
 
-  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
-                        proportions = c(0.25, 0.25, 0.5))
-  params$phi_bednets <- c(0.9, 0.9, 0.89)
-  params$phi_indoors <- c(0.96, 0.98, 0.97)
+ # save output ----------
+  saveRDS(output, paste0('./03_output/HPC/', name,'.rds'))
 
-  params <- set_drugs(params, list(AL_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
-  params <- set_equilibrium(params, starting_EIR)
-  output <- run_simulation(warmup + sim_length, params) %>%
-    mutate(eir=starting_EIR,
-           timestep=timestep-warmup,
-           model=season) %>%
-    filter(timestep > 0)
-
-  saveRDS(output, paste0('./rds/severe/none_',season,starting_EIR,'.rds'))
 }
