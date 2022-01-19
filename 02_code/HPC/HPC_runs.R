@@ -40,19 +40,19 @@ pfpr <- c(10,30,60) # start at 10% (min rec for RTSS use)
   # FIRST
   seas_name <- 'highly seasonal'
   seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
-  starting_EIR <- c(1.01,4.71,28.5)
+  starting_EIR <- c(2.31, 14.3, 100)
   s1 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
   # SECOND
   seas_name <- 'seasonal'
   seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
-  starting_EIR <- c(1.11,5.41,34.0)
+  starting_EIR <- c(1.81, 11.1, 90.5)
   s2 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
   # THIRD
   seas_name <- 'perennial'
   seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
-  starting_EIR <- c(1.01,4.61,28.4)
+  starting_EIR <- c(1.51, 8.52, 55.1)
   s3 <- crossing(seasonality, seas_name, starting_EIR) %>% cbind(pfpr)
 
 stable <- rbind(s1, s2, s3)
@@ -122,22 +122,22 @@ t$status()
 
 
 # test run
-x <- 4
-test <- runsimGF(population = combo[[x,1]],
-                 seasonality = combo[[x,2]],
-                 seas_name = combo[[x,3]],
-                 starting_EIR = combo[[x,4]],
-                 pfpr = combo[[x,5]],
-                 warmup = combo[[x,6]],
-                 sim_length = combo[[x,7]],
-                 speciesprop = combo[[x,8]],
-                 ITN = combo[[x,9]],
-                 ITNuse = combo[[x,10]],
-                 resistance = combo[[x,11]],
-                 IRS = combo[[x,12]],
-                 treatment = combo[[x,13]],
-                 SMC = combo[[x,14]],
-                 RTSS = combo[[x,15]],
-                 RTSScov = combo[[x,16]],
-                 fifth = combo[[x,17]],
-                 name = combo[[x,18]])
+# x <- 4
+# test <- runsimGF(population = combo[[x,1]],
+#                  seasonality = combo[[x,2]],
+#                  seas_name = combo[[x,3]],
+#                  starting_EIR = combo[[x,4]],
+#                  pfpr = combo[[x,5]],
+#                  warmup = combo[[x,6]],
+#                  sim_length = combo[[x,7]],
+#                  speciesprop = combo[[x,8]],
+#                  ITN = combo[[x,9]],
+#                  ITNuse = combo[[x,10]],
+#                  resistance = combo[[x,11]],
+#                  IRS = combo[[x,12]],
+#                  treatment = combo[[x,13]],
+#                  SMC = combo[[x,14]],
+#                  RTSS = combo[[x,15]],
+#                  RTSScov = combo[[x,16]],
+#                  fifth = combo[[x,17]],
+#                  name = combo[[x,18]])
