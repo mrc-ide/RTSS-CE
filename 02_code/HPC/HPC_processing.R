@@ -27,5 +27,5 @@ dat <- dat %>% rowwise() %>%
 View(dat[1:1000,c('n_rtss_epi_dose_1', 'n_rtss_mass_booster_1', 'dose1', 'dose4')])
 
 # save
-saveRDS(dat,"./03_output/rtss_raw.rds")
+saveRDS(dat,"C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE//03_output/rtss_raw.rds")
 

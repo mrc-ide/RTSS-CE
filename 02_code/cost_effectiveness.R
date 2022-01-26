@@ -42,68 +42,96 @@ averted <- dat3 %>%
   mutate(case_avert = ((inc_clinical/n) - (inc_clinical_baseline/n_baseline)) * 10000, # cases averted per 100,000 people
          severe_avert = ((inc_severe/n) - (inc_severe_baseline/n_baseline)) * 10000) # severe cases averted per 100,000 people
 
+# save
+saveRDS(averted,"./03_output/rtss_avert.rds")
+
+
 # DALYs ------------------------------------------------------------------------
 # DALYs = Years of life lost (YLL) + Years of live with disease (YLD)
 # YLL = Deaths * remaining years of life
 # YLD = cases and severe cases * disability weighting  * episode_length
 # CE = $ per event (case, death DALY) averted
 
-# Pete code: https://github.com/mrc-ide/gf/blob/69910e798a2ddce240c238d291bc36ea40661b90/R/epi.R#L89-L118
+# Pete code: https://github.com/mrc-ide/gf/blob/69910e798a2ddce240c238d291bc36ea40661b90/R/epi.R
 # Weights from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4772264/ {Gunda _et al_, 2016}
-lifespan = 63,
-episode_length = 0.01375
-severe_episode_length = 0.04795
-weight1 = 0.211     # Disability weight age group 1
-weight2 = 0.195     # Disability weight age group 2
-weight3 = 0.172     # Disability weight age group 3
-severe_weight = 0.6 # Disability weight severe malaria
 
-scaler = 0.215           #severe case to death modifier
-treatment_scaler = 0.5   #treatment modifier
-
-mortality_rate <- function(x, scaler = 0.215, treatment_scaler = 0.5){
+# mortality
+mortality_rate <- function(x,
+                           scaler = 0.215,          # severe case to death scaler
+                           treatment_scaler = 0.5){ # treatment modifier
   x %>%
-    dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment_coverage)) * scaler * .data$sev)
+    dplyr::mutate(sev = .data$inc_severe / .data$n) %>% # severe incidence
+    dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$ITNuse)) * scaler * .data$sev) # mortality rate
+    dplyr::mutate(deaths = .data$sev * .data$n) %>% # deaths
+}
+
+# case and death uncertainty
+outcome_uncertainty <- function(x,
+                                cases_cv = 0.227,   # case uncertainty SD scaler
+                                deaths_cv = 0.265){ # death uncertainty SD scaler
+  x %>%
+    dplyr::mutate(cases_lower = round(pmax(0, stats::qnorm(0.025, .data$cases, .data$cases * cases_cv))),
+                  cases_upper = round(stats::qnorm(0.975, .data$cases, .data$cases * cases_cv)),
+                  deaths_lower = round(pmax(0, stats::qnorm(0.025, .data$deaths, .data$deaths * deaths_cv))),
+                  deaths_upper = round(stats::qnorm(0.975, .data$deaths, .data$deaths * deaths_cv)))
+}
+
+# DALY components
+daly_components <- function(x,
+                            lifespan = 63,                   # average life expectancy
+                            episode_length = 0.01375,        # average length of clinical episode
+                            severe_episode_length = 0.04795, # average length of severe episode
+                            weight1 = 0.211,      # Disability weight age group 1
+                            weight2 = 0.195,      # Disability weight age group 2
+                            weight3 = 0.172,      # Disability weight age group 3
+                            severe_weight = 0.6){ # Disability weight severe malaria
+  x %>%
+    tidyr::separate(col = age, into = c("age_upper", "age_lower"), sep = "-", remove = F) %>%
+    dplyr::mutate(age_upper = as.numeric(age_upper),
+                  age_lower = as.numeric(age_lower)) %>%
+    dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+                  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+                  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+                  yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight))
 }
 
 
-dplyr::mutate(
-  yll = .data$deaths * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
-  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
-  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
 
-  yld = dplyr::case_when(
-    .data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
-
-  yld_lower = dplyr::case_when(
-    .data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
-
-  yld_upper = dplyr::case_when(
-    .data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-    .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight))
 
 daly = yyl + yld
 
 
 test <- averted %>% filter(file==1)
 
-#-costing data-----------------------------------------------------------------
-cost_per_dose <- c(2.69,6.52,12.91) #cost per vaccine - including the cost of wastage etc $2,$5,$10 per dose
-delivery_cost <- c(0.96,1.62,2.67)  #EPI delivery costs
-tx_unit_cost  <- 1.47               #clinical treatment cost
-severe_unit_cost <- 22.41           #severe treatment cost
+#-costing data------------------------------------------------------------------
+cost_per_dose <- c(2.69,6.52,12.91) # cost per vaccine - including the cost of wastage etc $2,$5,$10 per dose
+delivery_cost <- c(0.96,1.62,2.67)  # EPI delivery costs
+tx_unit_cost  <- 1.47               # clinical treatment cost
+severe_unit_cost <- 22.41           # severe treatment cost
+# ITNs - pyrethroid and PBO
+# seasonal vax delivery cost
+# SMC cost
+
 
 cost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
 
 
 
-# notes for RTS,S call
+# notes for RTS,S call ##############
+seasonality curves
 costing of interventions
-how to calculate mortality
-life tables
+life tables - do not need, 63 years life expectancy
 getting upper and lower confidence estimates
+non-malarial fevers - ignore
+casting forward - ignore
+
+ITN rollout strategy - thirds?
+####################################
