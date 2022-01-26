@@ -19,6 +19,7 @@ library(LaCroixColoR)
 # find ideas in rmarkdowns for figures and insert code if helpful
 
 dat <- readRDS("./03_output/rtss_raw.rds")
+averted <- readRDS("./03_output/rtss_avert.rds")
 
 
 # seasonality ------------------------------------------------------------------
@@ -112,6 +113,16 @@ ggplot(data=ITNdata) +
   scale_alpha_manual(values = c(rep(1,2))) +
   guides(alpha = guide_legend(title = 'intervention',
                               override.aes = list(color = c('blue','red'))))
+
+
+# cases averted ----------------------------------------------------------------
+avertdat <- averted %>%
+
+ggplot(data = avertdat) +
+  geom_bar(aes(x = , y = , fill = )) +
+  labs(title = "cases averted, aggregated years 1-5",
+       xlab = "scenario",
+       ylab = "cases")
 
 
 
