@@ -93,6 +93,33 @@ ggplot(data=baseline) +
 ggsave('./03_output/seasonality.pdf', width=6, height=6)
 
 
+# seasonality II ---------------------------------------------------------------
+output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0)
+
+SMCtime <- output %>% select(smc_timesteps, seasonality) %>%
+  mutate(t1 = unlist(smc_timesteps)[[21]],
+         t2 = unlist(smc_timesteps)[[22]],
+         t3 = unlist(smc_timesteps)[[23]],
+         t4 = unlist(smc_timesteps)[[24]])
+
+RTSStime <- output %>% select(rtss_mass_timesteps, seasonality) %>%
+  mutate(t1 = unlist(rtss_mass_timesteps)[[1]])
+
+ggplot(data = output) +
+  geom_line(aes(x=month, y=p_inc_clinical_0_1825/n_0_1825, color=as.factor(pfpr)), alpha = 0.8) +
+  geom_vline(xintercept=round(c(SMCtime$t1,SMCtime$t2,SMCtime$t3,SMCtime$t4)/(365/12), 0), lty=2, color='red') +
+  geom_vline(xintercept=round(c(RTSStime$t1)/(365/12), 0), lty=2, color='blue') +
+  labs(x='month', y='clinical incidence, 0-5 years', color='PfPR') +
+  facet_wrap(seasonality~pfpr) +
+  coord_cartesian(xlim = c(0,12)) +
+  theme_classic()
+
+
+sum(unlist(dat[1,]$bednet_timesteps))
+
+
+
+
 # bed nets and resistance ------------------------------------------------------
 ITNdata <- dat %>%
   filter(RTSS=='none' & SMC==0) %>%

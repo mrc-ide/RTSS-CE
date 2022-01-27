@@ -333,18 +333,18 @@ runsimGF <- function(population,        # simulation population
            month = ceiling(timestep/month)) %>%
     # only necessary variables
     dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
+                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
                   starts_with("n_rtss"), starts_with("p_inc"), starts_with("n_inc"), starts_with("n_detect"),
                   starts_with("p_detect"), starts_with("n_"), -n_bitten, -n_treated, -n_infections, bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
 
     # take means of populations and sums of cases by month
     group_by(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-             ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+             ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
              bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
     mutate_at(vars(n_0_1825:n_36500_73000), mean, na.rm = TRUE) %>%
     mutate_at(vars(n_inc_severe_0_1825:n_inc_clinical_36500_73000), sum, na.rm = TRUE) %>%
     dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
                   n_0_1825:n_36500_73000, n_inc_severe_0_1825:n_inc_clinical_36500_73000) %>%
     distinct()
 
