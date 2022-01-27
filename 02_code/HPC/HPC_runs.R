@@ -123,7 +123,7 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   select(-f, -exist)
 
 
-combo <- combo %>% filter(RTSS == "SV" & SMC == 0.85 & ITNuse == 0.50)
+combo <- combo %>% filter(RTSS == "SV" & SMC == 0.85 & ITNuse == 0.50 & ITNboost == 0 & resistance == 0)
 
 t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
