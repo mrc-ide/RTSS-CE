@@ -6,7 +6,6 @@ library(plotly)
 library(kableExtra)
 library(malariasimulation)
 library(data.table)
-library(RcppRoll)
 
 library(patchwork)
 library(scales)
@@ -94,30 +93,48 @@ ggsave('./03_output/seasonality.pdf', width=6, height=6)
 
 
 # seasonality II ---------------------------------------------------------------
-output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0)
+output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0)
 
-SMCtime <- output %>% select(smc_timesteps, seasonality) %>%
+SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
+  group_by(smc_timesteps, seasonality, pfpr) %>%
   mutate(t1 = unlist(smc_timesteps)[[21]],
          t2 = unlist(smc_timesteps)[[22]],
          t3 = unlist(smc_timesteps)[[23]],
-         t4 = unlist(smc_timesteps)[[24]])
+         t4 = unlist(smc_timesteps)[[24]]) %>%
+  distinct() %>%
+  pivot_longer(cols=t1:t4, names_to = "time", values_to = "smc") %>%
+  mutate(smc = case_when(seasonality=="seasonal" ~ smc - 5*365,
+                         TRUE ~ smc),
+         smc = smc / (365/12))
 
-RTSStime <- output %>% select(rtss_mass_timesteps, seasonality) %>%
-  mutate(t1 = unlist(rtss_mass_timesteps)[[1]])
+RTSStime <- output %>% select(rtss_mass_timesteps, seasonality, pfpr) %>%
+  group_by(rtss_mass_timesteps, seasonality, pfpr) %>%
+  mutate(rtss = unlist(rtss_mass_timesteps)[[1]]) %>%
+  distinct() %>%
+  mutate(rtss = rtss / (365/12))
+
+ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
+  group_by(bednet_timesteps, seasonality, pfpr) %>%
+  mutate(itn = unlist(bednet_timesteps)[[6]]) %>%
+  distinct() %>%
+  mutate(itn = itn / (365/12))
+
 
 ggplot(data = output) +
   geom_line(aes(x=month, y=p_inc_clinical_0_1825/n_0_1825, color=as.factor(pfpr)), alpha = 0.8) +
-  geom_vline(xintercept=round(c(SMCtime$t1,SMCtime$t2,SMCtime$t3,SMCtime$t4)/(365/12), 0), lty=2, color='red') +
-  geom_vline(xintercept=round(c(RTSStime$t1)/(365/12), 0), lty=2, color='blue') +
-  labs(x='month', y='clinical incidence, 0-5 years', color='PfPR') +
+  geom_vline(data = SMCtime, aes(xintercept=smc, alpha='SMC'), lty=2, color='red') +
+  geom_vline(data = RTSStime, aes(xintercept=rtss, alpha='RTS,S dose 3'), lty=2, color='blue') +
+  geom_vline(data = ITNtime, aes(xintercept=itn, alpha='ITN'), lty=2, color='green') +
+  labs(x='month', y='clinical incidence (month), 0-5 years', color='PfPR') +
+  scale_x_continuous(breaks = seq(0,12,1)) +
   facet_wrap(seasonality~pfpr) +
   coord_cartesian(xlim = c(0,12)) +
+  scale_alpha_manual(values = c(rep(1,3))) +
+  guides(alpha = guide_legend(title = 'intervention',
+                              override.aes = list(color = c('green','blue','red')))) +
   theme_classic()
 
-
-sum(unlist(dat[1,]$bednet_timesteps))
-
-
+ggsave('./03_output/seasonalityII.pdf', width=10, height=5)
 
 
 # bed nets and resistance ------------------------------------------------------
