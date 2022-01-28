@@ -105,19 +105,19 @@ SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
   pivot_longer(cols=t1:t4, names_to = "time", values_to = "smc") %>%
   mutate(smc = case_when(seasonality=="seasonal" ~ smc - 5*365,
                          TRUE ~ smc),
-         smc = smc / (365/12))
+         smc = smc / (365/12) + 1)
 
 RTSStime <- output %>% select(rtss_mass_timesteps, seasonality, pfpr) %>%
   group_by(rtss_mass_timesteps, seasonality, pfpr) %>%
   mutate(rtss = unlist(rtss_mass_timesteps)[[1]]) %>%
   distinct() %>%
-  mutate(rtss = rtss / (365/12))
+  mutate(rtss = rtss / (365/12) + 1)
 
 ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
   group_by(bednet_timesteps, seasonality, pfpr) %>%
   mutate(itn = unlist(bednet_timesteps)[[6]]) %>%
   distinct() %>%
-  mutate(itn = itn / (365/12))
+  mutate(itn = itn / (365/12) + 1)
 
 
 ggplot(data = output) +
@@ -126,7 +126,7 @@ ggplot(data = output) +
   geom_vline(data = RTSStime, aes(xintercept=rtss, alpha='RTS,S dose 3'), lty=2, color='blue') +
   geom_vline(data = ITNtime, aes(xintercept=itn, alpha='ITN'), lty=2, color='green') +
   labs(x='month', y='clinical incidence (month), 0-5 years', color='PfPR') +
-  scale_x_continuous(breaks = seq(0,12,1)) +
+  scale_x_continuous(breaks = seq(1,12,1)) +
   facet_wrap(seasonality~pfpr) +
   coord_cartesian(xlim = c(0,12)) +
   scale_alpha_manual(values = c(rep(1,3))) +

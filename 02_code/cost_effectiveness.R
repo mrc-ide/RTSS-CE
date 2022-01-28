@@ -2,48 +2,14 @@
 library(tidyverse)
 
 # pull in data from simulation runs (all interventions)
-dat <- readRDS("./03_output/rtss_raw.rds")
-
-# averted cases / severe-cases / deaths ----------------------------------------
-# summarize over first 5 years
-dat2 <- dat %>%
-  filter(year <= 5) %>% # first 5 years
-  group_by(file) %>%
-  mutate_at(vars(n_0_1825:n_36500_73000), mean, na.rm = TRUE) %>% # mean of n in each age group
-  mutate_at(vars(n_inc_severe_0_1825:dose4), sum, na.rm = TRUE) %>% # sum of cases and vax doses
-  select(-month, -year) %>%
-  distinct()
-
-# calculate outputs by age
-dat3 <- dat2 %>%
-  dplyr::select(file:n_36500_73000, p_inc_clinical_0_1825:p_inc_severe_36500_73000, dose1:dose4) %>%
-  pivot_longer(cols = c(n_0_1825:n_36500_73000, p_inc_clinical_0_1825:p_inc_clinical_36500_73000, p_inc_severe_0_1825:p_inc_severe_36500_73000), names_to = c('age'), values_to = c('value')) %>% # moving to long age groups
-  mutate(n = ifelse(grepl('n_', age), value, NA),
-         inc_clinical = ifelse(grepl('p_inc_clinical', age), value, NA), # creating var for inc_clinical
-         inc_severe = ifelse(grepl('p_inc_severe', age), value, NA), # creating var for inc_severe
-         age = gsub('n_', '', age), # creating var for age group
-         age = gsub('p_inc_clinical_', '', age),
-         age = gsub('p_inc_severe_', '', age),
-         age = gsub('_', '-', age)) %>%
-  group_by(file, age) %>%
-  select(-value) %>%
-  mutate_at(vars(n:inc_severe), sum, na.rm = TRUE) %>% # consolidate
-  distinct() %>% ungroup()
-
-# calculate outputs averted
-baseline <- dat3 %>% # summarizing outputs when there is no intervention
-  filter(ITNuse==0, RTSS=='none', ITN=='pyr', SMC==0) %>%
-  select(file, EIR, pfpr, seasonality, age:inc_severe) %>%
-  rename(n_baseline = n, inc_clinical_baseline = inc_clinical, inc_severe_baseline = inc_severe)
-
-averted <- dat3 %>%
-  filter(!(file %in% baseline$file)) %>% # taking out scenarios with no intervention
-  left_join(baseline %>% select(-file), by=c('EIR', 'pfpr', 'seasonality', 'age')) %>% # adding baseline data
-  mutate(case_avert = ((inc_clinical/n) - (inc_clinical_baseline/n_baseline)) * 10000, # cases averted per 100,000 people
-         severe_avert = ((inc_severe/n) - (inc_severe_baseline/n_baseline)) * 10000) # severe cases averted per 100,000 people
-
-# save
-saveRDS(averted,"./03_output/rtss_avert.rds")
+dalyoutput <- readRDS("C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/rtss_long.rds") %>%
+  separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
+  mutate(age_lower = as.numeric(age_lower),
+         age_upper = as.numeric(age_upper),
+         inc = inc_clinical / n,
+         sev = inc_severe / n,
+         cases = inc_clinical,
+         severe_cases = inc_severe)
 
 
 # DALYs ------------------------------------------------------------------------
@@ -57,13 +23,13 @@ saveRDS(averted,"./03_output/rtss_avert.rds")
 
 # mortality
 mortality_rate <- function(x,
-                           scaler = 0.215,          # severe case to death scaler
-                           treatment_scaler = 0.5){ # treatment modifier
+                           scaler = 0.215,           # severe case to death scaler
+                           treatment_scaler = 0.5) { # treatment modifier
   x %>%
-    dplyr::mutate(sev = .data$inc_severe / .data$n) %>% # severe incidence
-    dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$ITNuse)) * scaler * .data$sev) # mortality rate
-    dplyr::mutate(deaths = .data$sev * .data$n) %>% # deaths
+    dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) %>% # mortality rate
+    dplyr::mutate(deaths = .data$mortality_rate * .data$n)  # deaths
 }
+
 
 # case and death uncertainty
 outcome_uncertainty <- function(x,
@@ -86,39 +52,44 @@ daly_components <- function(x,
                             weight3 = 0.172,      # Disability weight age group 3
                             severe_weight = 0.6){ # Disability weight severe malaria
   x %>%
-    tidyr::separate(col = age, into = c("age_upper", "age_lower"), sep = "-", remove = F) %>%
-    dplyr::mutate(age_upper = as.numeric(age_upper),
-                  age_lower = as.numeric(age_lower)) %>%
     dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
                   yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
                   yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+
                   yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
                                          .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
                                          .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+
                   yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
                                                .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
                                                .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+
                   yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
                                                .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight))
+                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
+
+    dplyr::mutate(daly = yll + yld)
 }
 
 
+dalyoutput <- mortality_rate(dalyoutput)
+dalyoutput <- outcome_uncertainty(dalyoutput)
+dalyoutput <- daly_components(dalyoutput)
 
-
-daly = yyl + yld
-
-
-test <- averted %>% filter(file==1)
+saveRDS(dalyoutput, './')
 
 #-costing data------------------------------------------------------------------
-cost_per_dose <- c(2.69,6.52,12.91) # cost per vaccine - including the cost of wastage etc $2,$5,$10 per dose
-delivery_cost <- c(0.96,1.62,2.67)  # EPI delivery costs
-tx_unit_cost  <- 1.47               # clinical treatment cost
-severe_unit_cost <- 22.41           # severe treatment cost
-# ITNs - pyrethroid and PBO
-# seasonal vax delivery cost
-# SMC cost
+# costs
+# https://github.com/mrc-ide/gf/blob/master/data/unit_costs.rda
+# https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
+load('C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/01_data/unit_costs.rda')
+PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered
+PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered
+EPIcost <- unit_costs$cost_per_rtss_dose_delivered
+SVcost <- unit_costs$cost_per_rtss_dose_delivered
+SMCcost <- unit_costs$cost_per_smc_dose_delivered
+TREATcost <- 1.47               # clinical treatment cost
+SEVcost <- 22.41           # severe treatment cost
 
 
 cost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
@@ -126,12 +97,7 @@ cost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_c
 
 
 # notes for RTS,S call ##############
-seasonality curves
 costing of interventions
-life tables - do not need, 63 years life expectancy
-getting upper and lower confidence estimates
-non-malarial fevers - ignore
-casting forward - ignore
 
 ITN rollout strategy - thirds?
 ####################################
