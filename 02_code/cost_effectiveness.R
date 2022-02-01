@@ -71,47 +71,67 @@ daly_components <- function(x,
     dplyr::mutate(daly = yll + yld)
 }
 
-
+# run functions
 dalyoutput <- mortality_rate(dalyoutput)
 dalyoutput <- outcome_uncertainty(dalyoutput)
 dalyoutput <- daly_components(dalyoutput)
 
+# consolidate across ages
+dalyoutput <- dalyoutput %>%
+  select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
+  group_by(file) %>%                      # group to condense to one record per run
+  mutate(n_182.5_1825 = n_182.5_1825) %>% # create variable for n ages 0.5-5 years to use in costing
+  mutate_at(n, inc_clinical:daly)         # condense outputs over all ages in population
+
 saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
-#-costing data------------------------------------------------------------------
+
+# costing data------------------------------------------------------------------
 # costs
 # https://github.com/mrc-ide/gf/blob/master/data/unit_costs.rda
 # https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
 load('C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/01_data/unit_costs.rda')
+
 PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered
 PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered
-EPIcost <- unit_costs$cost_per_rtss_dose_delivered
-SVcost <- unit_costs$cost_per_rtss_dose_delivered
-SMCcost <- unit_costs$cost_per_smc_dose_delivered
-TREATcost <- 1.47               # clinical treatment cost
+TREATcost <- 1.47          # clinical treatment cost
 SEVcost <- 22.41           # severe treatment cost
+SMCcost <- unit_costs$cost_per_smc_dose_delivered
+cost_per_dose <- c(2.69, 6.52, 12.91)
+delivery_cost <- c(0.96, 1.62, 2.67)
+
+# create combinations of dose cost and delivery cost
+rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
 
 population <- 10000
+sim_length <- 15*365
 
 # add costs to dataset
-test <- dalyoutput %>%
-  mutate(ITNcov = ifelse(boost==1, ITNuse + .10, ITNuse),
-         ITNcost = case_when(ITN=='pyr' ~ PYRcost,
+dalyoutput_allages <- dalyoutput %>%
+
+  mutate(ITNuse = ifelse(boost==1, ITNuse + .10, ITNuse), # account for booster coverage
+         ITNcost = case_when(ITN=='pyr' ~ PYRcost,        # account for ITN type-specific cost
                              ITN=='pbo' ~ PBOcost)) %>%
-  min_age = round(0.5*year),
-max_age = round(5*year)) SMC
+
+  # count number of interventions administered
+  mutate(bednet_timesteps = as_tibble(unlist(bednet_timesteps)) %>%
+           filter(value>0 & value<=sim_length) %>% count() %>% as.numeric(),
+         smc_timesteps = as_tibble(unlist(smc_timesteps)) %>%
+           filter(value>0 & value<=sim_length) %>% count() %>% as.numeric()) %>%
+
+  # merge in RTSS costing dataframe
+  merge(rtsscost_df) %>%
+
+  # create cost variables
+  mutate(cost_novax = population * ITNuse * bednet_timesteps * ITNcost + # ITN
+                      n_treated * TREATcost +                            # treatment
+                      severe_cases * treatment * SEVcost +               # severe treatment
+                      n_182.5_1825 * SMC * SMCcost * smc_timesteps,      # SMC
+
+         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost),
+
+         cost_total = cost_novax + cost_vax)
 
 
-  mutate(cost = n * ITNuse * bednet_timesteps * ITNcost + # ITN
-                n_treated * TREATcost + # treatment
-                (dose1 + dose2 + dose3 + dose4) * EPIcost # RTSS
-                n * SMC * smc_timesteps # SMC add 6 months to 5 years n
-                SEVcost # severe treatment do we assume all severe cases get treated
-           )
+saveRDS(dalyoutput_allages, './03_output/dalyoutput_allages.rds')
 
-# notes for RTS,S call ##############
-costing of interventions
-15 year block?
-
-re-run taking out first 6 months to be able to capture SMC
-####################################
