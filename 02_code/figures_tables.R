@@ -90,6 +90,7 @@ ggsave('./03_output/seasonality.pdf', width=6, height=6)
 
 
 # seasonality II ---------------------------------------------------------------
+
 output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0 )%>%
   filter(seasonality == 'highly seasonal' & pfpr == 0.4)
 
@@ -122,7 +123,7 @@ ggplot(data = output) +
 
 ggsave('./03_output/seasonalityII.pdf', width=10, height=4)
 
-
+# seasonality III --------------------------------------------------------------
 # one year zoomed
 output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0 )
 
@@ -169,6 +170,7 @@ ggsave('./03_output/seasonalityIII.pdf', width=10, height=5)
 
 
 # bed nets and resistance ------------------------------------------------------
+
 ITNdata <- dat %>%
   filter(RTSS=='none' & SMC==0) %>%
   filter(ITNuse==.50) %>%
@@ -190,14 +192,22 @@ ggplot(data=ITNdata) +
                               override.aes = list(color = c('blue','red'))))
 
 
-# cases averted ----------------------------------------------------------------
-avertdat <- averted %>%
 
-ggplot(data = avertdat) +
-  geom_bar(aes(x = , y = , fill = )) +
-  labs(title = "cases averted, aggregated years 1-5",
-       xlab = "scenario",
-       ylab = "cases")
+
+
+# IDEAS ###########
+- resistance - ITNs, upgrading to PBO and boosting. no SMC add ins or RTSS
+
+- ITN change vs. SMC vs. RTSS in seasonal settings
+- ITN change vs. RTSS in highly seasonal settings
+- ITN change vs RTSS in perennial settings
+
+- RTSS changing cost - bar charts
+
+- looking at the effects of ITN boost, ITN change, SMC introduction, RTSS - scatter plot with change in CE and change in impact
+##################
+
+
 
 
 

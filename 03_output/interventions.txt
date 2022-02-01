@@ -20,7 +20,7 @@ Fifth dose = N/A
 
 1440 simulations total
 
-Time
+Time w/ 10,000 population
 EIR 197 w/ seasonality - 12 min
 EIR 55 - 14 min
 EIR 38 - 11 min
