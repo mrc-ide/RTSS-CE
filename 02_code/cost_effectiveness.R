@@ -76,7 +76,7 @@ dalyoutput <- mortality_rate(dalyoutput)
 dalyoutput <- outcome_uncertainty(dalyoutput)
 dalyoutput <- daly_components(dalyoutput)
 
-saveRDS(dalyoutput, './')
+saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
 #-costing data------------------------------------------------------------------
 # costs
@@ -91,13 +91,27 @@ SMCcost <- unit_costs$cost_per_smc_dose_delivered
 TREATcost <- 1.47               # clinical treatment cost
 SEVcost <- 22.41           # severe treatment cost
 
+population <- 10000
 
-cost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
+# add costs to dataset
+test <- dalyoutput %>%
+  mutate(ITNcov = ifelse(boost==1, ITNuse + .10, ITNuse),
+         ITNcost = case_when(ITN=='pyr' ~ PYRcost,
+                             ITN=='pbo' ~ PBOcost)) %>%
+  min_age = round(0.5*year),
+max_age = round(5*year)) SMC
 
 
+  mutate(cost = n * ITNuse * bednet_timesteps * ITNcost + # ITN
+                n_treated * TREATcost + # treatment
+                (dose1 + dose2 + dose3 + dose4) * EPIcost # RTSS
+                n * SMC * smc_timesteps # SMC add 6 months to 5 years n
+                SEVcost # severe treatment do we assume all severe cases get treated
+           )
 
 # notes for RTS,S call ##############
 costing of interventions
+15 year block?
 
-ITN rollout strategy - thirds?
+re-run taking out first 6 months to be able to capture SMC
 ####################################
