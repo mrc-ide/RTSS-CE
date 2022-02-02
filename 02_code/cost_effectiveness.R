@@ -80,8 +80,13 @@ dalyoutput <- daly_components(dalyoutput)
 dalyoutput <- dalyoutput %>%
   select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
   group_by(file) %>%                      # group to condense to one record per run
-  mutate(n_182.5_1825 = n_182.5_1825) %>% # create variable for n ages 0.5-5 years to use in costing
-  mutate_at(n, inc_clinical:daly)         # condense outputs over all ages in population
+  mutate(n_182.5_1825 = ifelse(age=='182.5-1825', n, 0)) %>% # create variable for n ages 0.5-5 years to use in costing
+  mutate_at(vars(n, n_182.5_1825, inc_clinical:daly), sum, na.rm=T) %>%      # condense outputs over all ages in population
+  select(-age, -age_upper, -age_lower) %>%
+  distinct()
+
+# check that n_182.5_1825 var is created correctly
+summary(dalyoutput$n_182.5_1825)
 
 saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
@@ -107,31 +112,29 @@ population <- 10000
 sim_length <- 15*365
 
 # add costs to dataset
-dalyoutput_allages <- dalyoutput %>%
+dalyoutput_cost <- dalyoutput %>%
 
-  mutate(ITNuse = ifelse(boost==1, ITNuse + .10, ITNuse), # account for booster coverage
+  mutate(ITNuse2 = ifelse(ITNboost==1, ITNuse + .10, ITNuse), # account for booster coverage
          ITNcost = case_when(ITN=='pyr' ~ PYRcost,        # account for ITN type-specific cost
                              ITN=='pbo' ~ PBOcost)) %>%
 
   # count number of interventions administered
-  mutate(bednet_timesteps = as_tibble(unlist(bednet_timesteps)) %>%
-           filter(value>0 & value<=sim_length) %>% count() %>% as.numeric(),
-         smc_timesteps = as_tibble(unlist(smc_timesteps)) %>%
-           filter(value>0 & value<=sim_length) %>% count() %>% as.numeric()) %>%
+  mutate(bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
+         smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps))) %>%
 
   # merge in RTSS costing dataframe
   merge(rtsscost_df) %>%
 
+  ungroup() %>% rowwise() %>%
+
   # create cost variables
-  mutate(cost_novax = population * ITNuse * bednet_timesteps * ITNcost + # ITN
-                      n_treated * TREATcost +                            # treatment
-                      severe_cases * treatment * SEVcost +               # severe treatment
-                      n_182.5_1825 * SMC * SMCcost * smc_timesteps,      # SMC
-
+  mutate(cost_ITN = population * ITNuse2 * bednet_timesteps * ITNcost, # ITN
+         cost_clinical = (cases-severe_cases) * treatment * TREATcost,     # non-severe treatment
+         cost_severe = severe_cases * treatment * SEVcost,             # severe treatment
+         cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,      # SMC
          cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost),
+         cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)
 
-         cost_total = cost_novax + cost_vax)
 
-
-saveRDS(dalyoutput_allages, './03_output/dalyoutput_allages.rds')
+saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 

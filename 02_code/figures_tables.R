@@ -19,6 +19,9 @@ library(LaCroixColoR)
 
 dat <- readRDS("./03_output/rtss_raw.rds")
 averted <- readRDS("./03_output/rtss_avert.rds")
+dalyoutput <- readRDS('./03_output/dalyoutput.rds')
+dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
+
 
 
 # seasonality ------------------------------------------------------------------
@@ -192,6 +195,166 @@ ggplot(data=ITNdata) +
                               override.aes = list(color = c('blue','red'))))
 
 
+
+# delta change -----------------------------------------------------------------
+# cost_per_dose <- c(2.69, 6.52, 12.91)
+# delivery_cost <- c(0.96, 1.62, 2.67)
+
+output <- dalyoutput_cost %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62)
+
+none <- output %>%
+  filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
+  rename(daly_baseline = daly,
+         cost__total_baseline = cost_total)
+
+output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
+  mutate(deltadaly = abs(daly_baseline - daly),
+         deltacost = cost_total - cost__total_baseline,
+         cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
+
+ITNboost <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITNboost==1) %>% filter(resistance==0)
+
+ITNpbo <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITN=='pbo') %>% filter(resistance==0)
+
+SMC <- output %>% filter(RTSS=='none') %>% filter(ITNboost==0 & ITN=='pyr') %>%
+  filter(seasonality!='highly seasonal') %>% filter(resistance==0) %>% filter(SMC==.85)
+
+RTSSSV <- output %>% filter(RTSS=='SV') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
+  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0)
+
+RTSSEPI <- output %>% filter(RTSS=='EPI') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
+  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0)
+
+ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
+  geom_point(data=ITNboost, aes(color='ITN boost (10%)', alpha=ITNuse, shape=factor(pfpr))) +
+  geom_point(data=ITNpbo, aes(color='ITN PBO', alpha=ITNuse, shape=factor(pfpr))) +
+  geom_point(data=SMC, aes(color='SMC alone', alpha=ITNuse, shape=factor(pfpr))) +
+  geom_point(data=RTSSSV, aes(color='RTS,S SV alone ($5)', alpha=ITNuse, shape=factor(pfpr))) +
+  geom_point(data=RTSSEPI, aes(color='RTS,S EPI alone ($5)', alpha=ITNuse, shape=factor(pfpr))) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  facet_wrap(~seasonality) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(x='change in cost (USD)',
+       y='change in DALYs',
+       color='intervention',
+       title='intervention impact',
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
+
+ggsave('./03_output/impact_cloud.pdf', width=8, height=5)
+
+
+# resistance ITNs --------------------------------------------------------------
+output <- dalyoutput_cost %>%
+  filter(RTSS=='none' & (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62)
+
+none <- output %>%
+  filter(ITNboost==0 & ITN=='pyr' & resistance==0) %>%
+  select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
+  rename(daly_baseline = daly,
+         cost__total_baseline = cost_total)
+
+output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
+  mutate(deltadaly = abs(daly_baseline - daly),
+         deltacost = cost_total - cost__total_baseline,
+         cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
+
+ITNboost <- output %>% filter(ITNboost==1)
+
+ITNpbo <- output %>% filter(ITN=='pbo')
+
+ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
+  geom_point(data=ITNboost, aes(color='ITN boost', alpha=pfpr)) +
+  geom_point(data=ITNpbo, aes(color='ITN PBO', alpha=pfpr)) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  theme_classic() +
+  facet_wrap(~resistance) +
+  labs(x='change in cost (USD)',
+       y='change in DALYs',
+       color='intervention',
+       alpha='PfPR',
+       title='intervention impact',
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='')
+
+table(output$ITNboost, output$ITN) # check ITNboost and ITN type relationship
+table(output$seasonality, output$pfpr)
+
+test <- output %>% filter(!(ITN=='pyr' & ITNboost==0)) %>% filter(ITNuse>0) %>%
+  mutate(ITN = ifelse(ITN=='pyr', "pyrethroid boost (10%)", "pyrethroid + PBO"),
+         scenario = case_when(ITNuse==0.25 & resistance==0 ~ "ITN 0.25 - none",
+                              ITNuse==0.25 & resistance==.4 ~ "ITN 0.25 - low",
+                              ITNuse==0.25 & resistance==.8 ~ "ITN 0.25 - high",
+                              ITNuse==0.50 & resistance==0 ~ "ITN 0.50 - none",
+                              ITNuse==0.50 & resistance==.4 ~ "ITN 0.50 - low",
+                              ITNuse==0.50 & resistance==.8 ~ "ITN 0.50 - high",
+                              ITNuse==0.75 & resistance==0 ~ "ITN 0.75 - none",
+                              ITNuse==0.75 & resistance==.4 ~ "ITN 0.75 - low",
+                              ITNuse==0.75 & resistance==.8 ~ "ITN 0.75 - high"))
+
+table(test$ITNuse, test$resistance, test$scenario)
+
+ggplot(data = test, aes(x=factor(scenario), y=deltadaly, alpha=factor(resistance))) +
+  geom_col(aes(fill=ITN), position=position_dodge()) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  facet_wrap(seasonality~pfpr) +
+  labs(x='scenario: ITNuse - resistance',
+       y='change in DALYs',
+       fill='ITN',
+       alpha = 'resistance',
+       title='Insecticide resistance',
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='faceted by seasonality and PfPR')
+
+ggsave('./03_output/resistance.pdf', width=8, height=5)
+
+
+# cost per DALY averted --------------------------------------------------------
+output <- dalyoutput_cost %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62)
+
+none <- output %>%
+  filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
+  rename(daly_baseline = daly,
+         cost__total_baseline = cost_total)
+
+output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
+  mutate(deltadaly = abs(daly_baseline - daly),
+         deltacost = cost_total - cost__total_baseline,
+         cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
+
+ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
+  geom_point(data=ITNboost, aes(color='ITN boost')) +
+  geom_point(data=ITNpbo, aes(color='ITN PBO')) +
+  geom_point(data=SMC, aes(color='SMC alone')) +
+  geom_point(data=RTSS, aes(color='RTS,S alone')) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  theme_classic() +
+  labs(x='change in cost (USD)',
+       y='change in DALYs',
+       color='intervention',
+       title='intervention impact',
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
+
+ggsave('./03_output/daly_averted.pdf', width=8, height=5)
+
+
+# RTS,S cost -------------------------------------------------------------------
+output <- dalyoutput_cost %>%
+  filter(delivery_cost==1.62)
+
+# cost_per_dose <- c(2.69, 6.52, 12.91)
+# delivery_cost <- c(0.96, 1.62, 2.67)
 
 
 
