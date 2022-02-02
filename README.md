@@ -23,7 +23,14 @@ Strategic resource allocation to maximize the impact of malaria response.
 .
 ├── 01_data                            # Data files
 ├── 02_code                            # R code file
-├── 03_output                          # Figures and Tables
+|   ├── HPC                            # Copy of Q: drive folder for HPC runs
+|   |   ├── functions.R                # Functions
+|   |   ├── PfPR_EIR_match.R           # Matching model PfPR outputs to EIRs
+|   |   ├── EIRestimates.rds           # Stored EIR estimates for select PfPR settings
+|   |   ├── HPC_runs.R                 # Running malariasimulation scenarios on HPC
+|   |   ├── HPC_processing.R           # Processing model output
+├── 03_output                          # Figures and .rds files
 ├── GF_RTSS_CE.Rproj                   # R.Studio project file
 └── README.md                          # Project overview
+
 ```
