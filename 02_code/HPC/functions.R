@@ -1,5 +1,5 @@
 
-# set interventions and run malariasimulation ----------------------------------
+# Set interventions and run malariasimulation ----------------------------------
 
 runsimGF <- function(population,        # simulation population
                      seasonality,       # seasonal profile
@@ -37,10 +37,12 @@ runsimGF <- function(population,        # simulation population
 
   # outcome definitions ----------
     # incidence for every 5 year age group
-  params$clinical_incidence_rendering_min_ages = seq(0,100,5)*year
-  params$clinical_incidence_rendering_max_ages = c(seq(5,100,5),200)*year
-  params$severe_incidence_rendering_min_ages = seq(0,100,5)*year
-  params$severe_incidence_rendering_max_ages = c(seq(5,100,5),200)*year
+  params$clinical_incidence_rendering_min_ages = c(0, 0.5, seq(5,100,5))*year
+  params$clinical_incidence_rendering_max_ages = c(0.5, seq(5,100,5),200)*year
+  params$severe_incidence_rendering_min_ages = c(0, 0.5, seq(5,100,5))*year
+  params$severe_incidence_rendering_max_ages = c(0.5, seq(5,100,5),200)*year
+  params$prevalence_rendering_min_ages = 2 * year
+  params$prevalence_rendering_max_ages = 10 * year
 
   # demography ----------
   flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
@@ -74,8 +76,8 @@ runsimGF <- function(population,        # simulation population
   bednet_timesteps <- c(0)
 
   # no resistance
-  dn0_1 <- case_when(ITN=='pyr' ~ 0.387,
-                     ITN=='pbo' ~ 0.517)
+  dn0_1 <- 0.387 # pyr, 0 resistance
+
   # resistance
   dn0_2 <- case_when(ITN=='pyr' & resistance==0 ~ 0.387,
                      ITN=='pyr' & resistance==0.4 ~ 0.352,
@@ -84,8 +86,7 @@ runsimGF <- function(population,        # simulation population
                      ITN=='pbo' & resistance==0.4 ~ 0.494,
                      ITN=='pbo' & resistance==0.8 ~ 0.419)
   # no resistance
-  rn_1 <- case_when(ITN=='pyr' ~ 0.563,
-                    ITN=='pbo' ~ 0.474)
+  rn_1 <- 0.563 # pyr, 0 resistance
 
   # resistance
   rn_2 <- case_when(ITN=='pyr' & resistance==0 ~ 0.563,
@@ -96,8 +97,7 @@ runsimGF <- function(population,        # simulation population
                     ITN=='pbo' & resistance==0.8 ~ 0.525)
 
   # no resistance
-  gamman_1 <- case_when(ITN=='pyr'~ 2.64,
-                      ITN=='pbo' ~ 2.64)
+  gamman_1 <- 2.64 # pyr, 0 resistance
 
   # resistance
   gamman_2 <- case_when(ITN=='pyr' & resistance==0 ~ 2.64,
@@ -115,26 +115,30 @@ runsimGF <- function(population,        # simulation population
   }
 
   if (ITNuse > 0) {
+  npre <- ceiling(warmup/(3*year))      # number of distributions during warmup
+  npost <- ceiling(sim_length/(3*year)) # number of distributions during sim_length
+
   params <- set_bednets(
     parameters = params,
-    timesteps = c(seq(1, (warmup), year),  # baseline coverage starts at 1
-                  seq(warmup + 1, (warmup + sim_length), year)), # intervention coverage starts at sim_length
-    coverages = c(rep(ITNuse1, (warmup)/year),         # set baseline coverage
-                  rep(ITNuse2, (sim_length)/year)),    # set intervention coverage
-    retention = 1 * year,
-    dn0 = matrix(c(rep(dn0_1, warmup/year), rep(dn0_2, sim_length/year),
-                   rep(dn0_1, warmup/year), rep(dn0_2, sim_length/year),
-                   rep(dn0_1, warmup/year), rep(dn0_2, sim_length/year)),
-                 nrow=(warmup + sim_length)/year, ncol=3),
-    rn = matrix(c(rep(rn_1, warmup/year), rep(rn_2, sim_length/year),
-                  rep(rn_1, warmup/year), rep(rn_2, sim_length/year),
-                  rep(rn_1, warmup/year), rep(rn_2, sim_length/year)),
-                nrow=(warmup + sim_length)/year, ncol=3),
-    rnm = matrix(c(rep(.24, (warmup + sim_length)/year),
-                   rep(.24, (warmup + sim_length)/year),
-                   rep(.24, (warmup + sim_length)/year)),
-                 nrow=(warmup + sim_length)/year, ncol=3),
-    gamman = c(rep(gamman_1 * 365, warmup/year), rep(gamman_2 * 365, sim_length/year))
+    timesteps = c(seq(1, (warmup), 3*year),  # baseline coverage starts at 1
+                  seq(warmup + 1, (warmup + sim_length), 3*year)), # intervention coverage starts at sim_length
+
+    coverages = c(rep(ITNuse1, npre),         # set baseline coverage
+                  rep(ITNuse2, npost)),    # set intervention coverage
+    retention = 3 * year,
+    dn0 = matrix(c(rep(dn0_1, npre), rep(dn0_2, npost),
+                   rep(dn0_1, npre), rep(dn0_2, npost),
+                   rep(dn0_1, npre), rep(dn0_2, npost)),
+                 nrow=npre + npost, ncol=3),
+    rn = matrix(c(rep(rn_1, npre), rep(rn_2, npost),
+                  rep(rn_1, npre), rep(rn_2, npost),
+                  rep(rn_1, npre), rep(rn_2, npost)),
+                nrow=npre + npost, ncol=3),
+    rnm = matrix(c(rep(.24, npre + npost),
+                   rep(.24, npre + npost),
+                   rep(.24, npre + npost)),
+                 nrow=npre + npost, ncol=3),
+    gamman = c(rep(gamman_1 * 365, npre), rep(gamman_2 * 365, npost))
   )
 
   bednet_timesteps <- params$bednet_timesteps - warmup
@@ -192,7 +196,7 @@ runsimGF <- function(population,        # simulation population
 
   if (SMC > 0 & seas_name == 'seasonal') {
     peak <- peak_season_offset(params)
-    first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0)
+    first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5,2.5)*month),0)
     firststeps <- sort(rep(first, sim_length/year))
     yearsteps <- rep(c(0, seq(year, sim_length - year, year)), length(first))
     timesteps <- yearsteps + firststeps
@@ -331,23 +335,33 @@ runsimGF <- function(population,        # simulation population
     # statistics by month
     mutate(year = ceiling(timestep/year),
            month = ceiling(timestep/month)) %>%
+
     # only necessary variables
     dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, starts_with("n_inc_severe"),
-                  starts_with("n_rtss"), starts_with("p_inc"), starts_with("n_inc"), starts_with("n_detect"),
-                  starts_with("p_detect"), starts_with("n_"), -n_bitten, n_treated, n_infections, bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
+                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  starts_with("n_inc_severe"), starts_with("p_inc_severe"),
+                  starts_with("n_rtss"),
+                  starts_with("n_inc"), starts_with("p_inc"),
+                  starts_with("n_detect"), starts_with("p_detect"),
+                  starts_with("n_"), -n_bitten, n_treated, n_infections, bednet_timesteps,
+                  smc_timesteps, rtss_mass_timesteps) %>%
 
     # take means of populations and sums of cases by month
     group_by(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
              ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
              bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
-    mutate_at(vars(n_0_1825:n_36500_73000), mean, na.rm = TRUE) %>%
-    mutate_at(vars(n_inc_severe_0_1825:n_inc_clinical_36500_73000), sum, na.rm = TRUE) %>%
-    mutate_at(vars(n_treated, n_infections), sum, na.rm = TRUE) %>%
-    dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth, n_treated, n_infections,
-                  bednet_timesteps, smc_timesteps, rtss_mass_timesteps,
-                  n_0_1825:n_36500_73000, n_inc_severe_0_1825:n_inc_clinical_36500_73000) %>%
+
+    mutate_at(vars(n_0_182.5:n_36500_73000, n_730_3650,
+                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) %>%
+    mutate_at(vars(n_inc_severe_0_182.5:p_inc_clinical_36500_73000,
+                   n_treated, n_infections), sum, na.rm = TRUE) %>%
+
+    dplyr::select(n_0_182.5:n_36500_73000,
+                  n_inc_severe_0_182.5:p_inc_clinical_36500_73000,
+                  n_detect_730_3650, p_detect_730_3650,
+                  n_730_3650,
+                  n_treated, n_infections) %>%
+
     distinct()
 
  # save output ----------
@@ -395,9 +409,9 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
 
   if (seas_name == 'highly seasonal') {
   peak <- peak_season_offset(params)
-  first <- round(peak+c(-0.5,0.5,1.5,2.5)*month,0)
-  firststeps <- sort(rep(first, 5))
-  yearsteps <- rep(c(0, seq(year, 4*year, year)), length(first))
+  first <- round(c(peak+c(-0.5,0.5,1.5,2.5)*month),0)
+  firststeps <- sort(rep(first, (9*year)/year))
+  yearsteps <- rep(c(0, seq(year, (9*year) - year, year)), length(first))
   timesteps <- yearsteps + firststeps
 
   params <- set_smc(
@@ -423,55 +437,44 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
 
   params <- set_bednets(
     parameters = params,
-    timesteps = seq(1, 5*year, year),
-    coverages = rep(ITNuse, 5),
-    retention = 1 * year,
-    dn0 = matrix(c(rep(dn0_1, 5),
-                   rep(dn0_1, 5),
-                   rep(dn0_1, 5)),
-                 nrow=5, ncol=3),
-    rn = matrix(c(rep(rn_1, 5),
-                  rep(rn_1, 5),
-                  rep(rn_1, 5)),
-                nrow=5, ncol=3),
-    rnm = matrix(c(rep(.24, 5),
-                   rep(.24, 5),
-                   rep(.24, 5)),
-                 nrow=5, ncol=3),
-    gamman = rep(gamman_1 * 365, 5))
+    timesteps = seq(1, 9*year, 3*year),
+    coverages = rep(ITNuse, 3),
+    retention = 3 * year,
+    dn0 = matrix(c(rep(dn0_1, 3),
+                   rep(dn0_1, 3),
+                   rep(dn0_1, 3)),
+                 nrow=3, ncol=3),
+    rn = matrix(c(rep(rn_1, 3),
+                  rep(rn_1, 3),
+                  rep(rn_1, 3)),
+                nrow=3, ncol=3),
+    rnm = matrix(c(rep(.24, 3),
+                   rep(.24, 3),
+                   rep(.24, 3)),
+                 nrow=3, ncol=3),
+    gamman = rep(gamman_1 * 365, 3))
 
   params <- set_equilibrium(params, as.numeric(init_EIR))
 
   output <- run_simulation(
-    timesteps = 5 * year,
+    timesteps = 9 * year,
     parameters = params,
     correlations = NULL)
-
-  # output EIR values
-  EIR <-
-      mean(
-        rowSums(
-          output[
-            output$timestep %in% seq(4 * 365, 5 * 365, 1),
-            grepl('EIR_', names(output))
-          ] / human_population * year
-        )
-      )
 
   # output prev 2-10 values
   prev <-
       mean(
         output[
-          output$timestep %in% seq(4 * 365, 5 * 365),
+          output$timestep %in% seq(7 * year, 9 * year), # averaging a multiple of 3 for bednets
           'n_detect_730_3650'
         ] / output[
-          output$timestep %in% seq(4 * 365, 5 * 365),
+          output$timestep %in% seq(7 * year, 9 * year),
           'n_730_3650'
         ]
       )
 
   # create dataframe of initial EIR, output EIR, and prev 2-10 results
-  EIR_prev <- cbind(seas_name, ITN, ITNuse, init_EIR, EIR, prev)
+  EIR_prev <- cbind(seas_name, ITN, ITNuse, init_EIR, prev)
 
   saveRDS(EIR_prev, paste0('./03_output/PR_EIR/', name,'.rds'))
 

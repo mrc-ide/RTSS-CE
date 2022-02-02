@@ -118,7 +118,7 @@ dalyoutput_cost <- dalyoutput %>%
          ITNcost = case_when(ITN=='pyr' ~ PYRcost,        # account for ITN type-specific cost
                              ITN=='pbo' ~ PBOcost)) %>%
 
-  # count number of interventions administered
+  # count the number of interventions administered
   mutate(bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
          smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps))) %>%
 
@@ -128,12 +128,13 @@ dalyoutput_cost <- dalyoutput %>%
   ungroup() %>% rowwise() %>%
 
   # create cost variables
-  mutate(cost_ITN = population * ITNuse2 * bednet_timesteps * ITNcost, # ITN
-         cost_clinical = (cases-severe_cases) * treatment * TREATcost,     # non-severe treatment
-         cost_severe = severe_cases * treatment * SEVcost,             # severe treatment
-         cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,      # SMC
-         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost),
-         cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)
+  mutate(cost_ITN = population * ITNuse2 * bednet_timesteps * ITNcost,                 # ITN
+         cost_clinical = (cases-severe_cases) * treatment * TREATcost,                 # non-severe treatment
+         cost_severe = severe_cases * treatment * SEVcost,                             # severe treatment
+         cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
+         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
+
+         cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)    # TOTAL
 
 
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')

@@ -1,6 +1,6 @@
-# Set-up ----------------------------------------------------------------------
+# HPC set-up -------------------------------------------------------------------
 library(didehpc)
-setwd('M:/Hillary/GF-RTSS-CE')
+setwd('Q:/GF-RTSS-CE')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
@@ -10,22 +10,23 @@ source('./02_code/HPC/functions.R')
 # remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
-ctx <- context::context_save(path = "M:/Hillary/contexts",
+ctx <- context::context_save(path = "Q:/contexts",
                              sources = c('./02_code/HPC/functions.R'),
-                             packages = c("tidyverse", "malariasimulation"),
+                             packages = c("dplyr", "malariasimulation"),
                              package_sources = src)
 
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didef3.dide.ic.ac.uk/malaria", "M:")
+share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/homes/htopazia', "M:")
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
                                   cluster = "fi--didemrchnb",
                                   parallel = FALSE)
 
-obj <- didehpc::queue_didehpc(ctx, config = config)
+obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
 
 
-# Now set up your job ---------------------------------------------------------
+
+# Set up your job --------------------------------------------------------------
 library(tidyverse)
 year <- 365
 
@@ -59,7 +60,7 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25,0.25,0.5))),
                           row.names = NULL)
 
 # run time
-warmup <- 5*year
+warmup <- 9*year # needs to be multiple of 3 so bednets will line up with first timestep
 sim_length <- 20*year
 
 # interventions
@@ -87,12 +88,13 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
   filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none'))) %>% # no fifth doses with EPI or none
   filter(!(SMC>0 & seas_name=="perennial")) %>% # do not administer SMC in perennial settings
   filter(!(SMC==0 & seas_name=="highly seasonal")) %>% # always SMC in highly seasonal settings
-  filter(!(ITNuse==0 & resistance !=0)) # can't have resistance levels when ITNuse= 0
+  filter(!(ITNuse==0 & resistance !=0)) %>% # can't have resistance levels when ITNuse= 0
+  filter(!(ITN=='pbo' & ITNboost==1)) # no boost AND PBO combinations
 
 # EIR / prev match from 'PfPR_EIR_match.R'
-match <- readRDS("C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/PR_EIRmatch.rds")
+match <- readRDS("./02_code/HPC/EIRestimates.rds")
 
-combo <- combo %>% left_join(match) %>%
+combo <- combo %>% left_join(match %>% select(-ITN)) %>%
   # put into correct order of function arguments
   select(population,        # simulation population
          seasonality,       # seasonal profile
@@ -116,20 +118,21 @@ combo <- combo %>% left_join(match) %>%
   ) %>% as.data.frame()
 
 
-# Run tasks -------------------------------------------------------------------
+# Run tasks --------------------------------------------------------------------
 combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
   filter(exist==0) %>%
   select(-f, -exist)
 
-
-combo <- combo %>% filter(RTSS == "SV" & SMC == 0.85 & ITNuse == 0.50 & ITNboost == 0 & resistance == 0)
-
+# to run for test
+# combo <- combo %>% filter(RTSS == "SV" & SMC == 0.85 & ITNuse == 0.50 & ITNboost == 0 & resistance == 0)
 t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
 
+beepr::beep(1)
 
-# test run
+
+# test run by hand
 # x <- 4
 # test <- runsimGF(population = combo[[x,1]],
 #                  seasonality = combo[[x,2]],
