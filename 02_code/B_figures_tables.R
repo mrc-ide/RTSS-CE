@@ -23,75 +23,6 @@ dalyoutput <- readRDS('./03_output/dalyoutput.rds')
 dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
 
 
-
-# seasonality ------------------------------------------------------------------
-
-# get starting parameters
-seas_name <- 'highly seasonal'
-seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
-s1 <- crossing(seasonality, seas_name)
-
-seas_name <- 'seasonal'
-seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
-s2 <- crossing(seasonality, seas_name)
-
-stable <- rbind(s1, s2)
-
-find_peak <- function(seasonality, seas_name){
-  month <- 365/12
-
-  params <- get_parameters(list(
-    human_population = 1000,
-    model_seasonality = TRUE,
-    g0 = unlist(seasonality)[1],
-    g = unlist(seasonality)[2:4],
-    h = unlist(seasonality)[5:7],
-    individual_mosquitoes = FALSE))
-
-  peak <- peak_season_offset(params)
-  smc <- crossing('smc', round(c(peak+c(-1.5,-0.5,0.5,1.5)*month),0))
-  colnames(smc) <- c('intervention', 'month')
-
-  first <- round((peak-month*3.5),0)
-  sv <- crossing('sv', first + round(c(0,1*month,2*month)))
-  colnames(sv) <- c('intervention', 'month')
-
-  interventions <- rbind(smc, sv) %>%
-    mutate(seasonality = seas_name,
-           month = month/365*12,
-           color = ifelse(intervention=='smc', 'red', 'blue'))
-
-  return(interventions)
-}
-
-output <- map2_dfr(stable$seasonality, stable$seas_name, find_peak)
-
-baseline <- dat %>%
-  filter(ITNuse==0 &  RTSS=='none' &  ITN=='pyr' &
-           seasonality != 'perennial' & ITNboost == 0 & (seasonality=="seasonal" & SMC==0 | seasonality=="highly seasonal" & SMC==0.85)) %>%
-  mutate(inc_month=n_inc_clinical_0_1825/n_0_1825, na.rm=T) %>%
-  filter(month %in% seq(1,12,1))
-
-ggplot(data=baseline) +
-  geom_line(data=baseline, aes(x=month, y=inc_month, color=as.factor(pfpr))) +
-  geom_vline(data=output[output$intervention=='smc',], aes(xintercept=month, alpha='SMC'), lty=2, color='red') +
-  geom_vline(data=output[output$intervention=='sv',], aes(xintercept=month, alpha='RTS,S'), lty=2, color='blue') +
-  labs(title='distribution of SMC and seasonal RTS,S; ages 0-5 years',
-       caption='highly seasonal has SMC implemented at baseline',
-       x="Timesteps (month)",
-       y="Monthly clinical incidence",
-       color = 'PfPR') +
-  scale_y_continuous(limits=c(0,0.8), breaks=seq(0,0.8,0.2)) +
-  scale_x_continuous(limits=c(1,12), breaks=seq(1,12,1)) +
-  facet_wrap('seasonality', ncol = 1) +
-  theme_classic() +
-  scale_alpha_manual(values = c(rep(1,2))) +
-  guides(alpha = guide_legend(title = 'intervention',
-                               override.aes = list(color = c('blue','red'))))
-
-ggsave('./03_output/seasonality.pdf', width=6, height=6)
-
-
 # seasonality II ---------------------------------------------------------------
 
 output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0 )%>%
@@ -112,7 +43,7 @@ colnames(ITNtime) <- "itn"
 
 
 ggplot(data = output) +
-  geom_line(aes(x=month, y=p_inc_clinical_0_1825/n_0_1825), alpha = 0.8) +
+  geom_line(aes(x=month, y=n_inc_clinical_182.5_1825/n_182.5_1825), alpha = 0.8) +
   geom_vline(data = SMCtime, aes(xintercept=smc/(365/12), alpha='SMC'), lty=2, color='red') +
   geom_vline(data = RTSStime, aes(xintercept=rtss/(365/12), alpha='RTS,S dose 3'), lty=2, color='blue') +
   geom_vline(data = ITNtime, aes(xintercept=itn/(365/12), alpha='ITN'), lty=2, color='green') +
@@ -126,21 +57,21 @@ ggplot(data = output) +
 
 ggsave('./03_output/seasonalityII.pdf', width=10, height=4)
 
+
 # seasonality III --------------------------------------------------------------
 # one year zoomed
-output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0 )
+output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0.5 & resistance == 0 & ITNboost == 0 & ITNuse == .5)
 
 SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
   group_by(smc_timesteps, seasonality, pfpr) %>%
-  mutate(t1 = unlist(smc_timesteps)[[21]],
-         t2 = unlist(smc_timesteps)[[22]],
-         t3 = unlist(smc_timesteps)[[23]],
-         t4 = unlist(smc_timesteps)[[24]]) %>%
+  mutate(t1 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[1]], unlist(smc_timesteps)[[37]]),
+         t2 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[2]], unlist(smc_timesteps)[[38]]),
+         t3 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[3]], unlist(smc_timesteps)[[39]]),
+         t4 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[4]], unlist(smc_timesteps)[[40]]),
+         t5 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[5]], NA)) %>%
   distinct() %>%
-  pivot_longer(cols=t1:t4, names_to = "time", values_to = "smc") %>%
-  mutate(smc = case_when(seasonality=="seasonal" ~ smc - 5*365,
-                         TRUE ~ smc),
-         smc = smc / (365/12) + 1)
+  pivot_longer(cols=t1:t5, names_to = "time", values_to = "smc") %>%
+  mutate(smc = smc / (365/12) + 1)
 
 RTSStime <- output %>% select(rtss_mass_timesteps, seasonality, pfpr) %>%
   group_by(rtss_mass_timesteps, seasonality, pfpr) %>%
@@ -150,15 +81,17 @@ RTSStime <- output %>% select(rtss_mass_timesteps, seasonality, pfpr) %>%
 
 ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
   group_by(bednet_timesteps, seasonality, pfpr) %>%
-  mutate(itn = unlist(bednet_timesteps)[[6]]) %>%
+  mutate(itn = unlist(bednet_timesteps)[[4]]) %>%
   distinct() %>%
   mutate(itn = itn / (365/12) + 1)
 
+none <- dat %>%
+  filter(ITNboost==0 & ITNuse==0.5 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal')))
 
-ggplot(data = output) +
-  geom_line(aes(x=month, y=p_inc_clinical_0_1825/n_0_1825, color=as.factor(pfpr)), alpha = 0.8) +
+ggplot(data = none %>% filter(seasonality != 'perennial')) +
+  geom_line(aes(x=month, y=n_inc_clinical_182.5_1825/n_182.5_1825, color=as.factor(pfpr)), alpha = 0.8) +
   geom_vline(data = SMCtime, aes(xintercept=smc, alpha='SMC'), lty=2, color='red') +
-  geom_vline(data = RTSStime, aes(xintercept=rtss, alpha='RTS,S dose 3'), lty=2, color='blue') +
+  geom_vline(data = RTSStime, aes(xintercept=rtss, alpha='SV RTS,S dose 3'), lty=2, color='blue') +
   geom_vline(data = ITNtime, aes(xintercept=itn, alpha='ITN'), lty=2, color='green') +
   labs(x='month', y='clinical incidence (month), 0-5 years', color='PfPR') +
   scale_x_continuous(breaks = seq(1,12,1)) +
@@ -170,30 +103,6 @@ ggplot(data = output) +
   theme_classic()
 
 ggsave('./03_output/seasonalityIII.pdf', width=10, height=5)
-
-
-# bed nets and resistance ------------------------------------------------------
-
-ITNdata <- dat %>%
-  filter(RTSS=='none' & SMC==0) %>%
-  filter(ITNuse==.50) %>%
-  mutate(inc_month=n_inc_clinical_0_1825/n_0_1825, na.rm=T) %>%
-  filter(month %in% seq(1,12,1))
-
-ggplot(data=ITNdata) +
-  geom_line(aes(x=month, y=inc_month, color=as.factor(interaction(ITN, resistance)))) +
-  labs(title='distribution of SMC and seasonal RTS,S, ages 0-5 years',
-       x="Timesteps (month)",
-       y="Monthly clinical incidence",
-       color = 'PfPR') +
-  scale_y_continuous(limits=c(0,0.5), breaks=seq(0,0.5,0.1)) +
-  scale_x_continuous(limits=c(1,12), breaks=seq(1,12,1)) +
-  facet_wrap(c('seasonality','pfpr'), ncol = 3, nrow = 3) +
-  theme_classic() +
-  scale_alpha_manual(values = c(rep(1,2))) +
-  guides(alpha = guide_legend(title = 'intervention',
-                              override.aes = list(color = c('blue','red'))))
-
 
 
 # delta change -----------------------------------------------------------------
@@ -210,22 +119,22 @@ none <- output %>%
          cost__total_baseline = cost_total)
 
 output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
-  mutate(deltadaly = abs(daly_baseline - daly),
+  mutate(deltadaly = daly_baseline - daly,
          deltacost = cost_total - cost__total_baseline,
          cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
 
-ITNboost <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITNboost==1) %>% filter(resistance==0)
+ITNboost <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITNboost==1) %>% filter(resistance==0) %>% mutate(intervention='boost')
 
-ITNpbo <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITN=='pbo') %>% filter(resistance==0)
+ITNpbo <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITN=='pbo') %>% filter(resistance==0) %>% mutate(intervention='pbo')
 
 SMC <- output %>% filter(RTSS=='none') %>% filter(ITNboost==0 & ITN=='pyr') %>%
-  filter(seasonality!='highly seasonal') %>% filter(resistance==0) %>% filter(SMC==.85)
+  filter(seasonality!='highly seasonal') %>% filter(resistance==0) %>% filter(SMC==.85) %>% mutate(intervention='smc')
 
 RTSSSV <- output %>% filter(RTSS=='SV') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
-  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0)
+  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0) %>% mutate(intervention='sv')
 
 RTSSEPI <- output %>% filter(RTSS=='EPI') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
-  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0)
+  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0) %>% mutate(intervention='epi')
 
 ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
   geom_point(data=ITNboost, aes(color='ITN boost (10%)', alpha=ITNuse, shape=factor(pfpr))) +
@@ -239,19 +148,54 @@ ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
   labs(x='change in cost (USD)',
-       y='change in DALYs',
+       y='absolute change in DALYs',
        color='intervention',
        title='intervention impact',
+       shape="PfPR",
+       alpha="baseline ITN usage",
        subtitle='matched on seasonality, PfPR, and ITN usage',
        caption='Assuming resistance == 0, SMC implemented in seasonal settings')
 
-ggsave('./03_output/impact_cloud.pdf', width=8, height=5)
+ggsave('./03_output/impact_cloudI.pdf', width=8, height=5)
+
+test <- rbind(ITNboost, ITNpbo, SMC, RTSSSV, RTSSEPI) %>%
+  group_by(seasonality, pfpr, intervention) %>%
+  mutate(ID = paste(seasonality, pfpr, ITNuse, sep="_"))
+
+table(test$ID)
+
+supp.labs <- c("PfPR: 0.1", "PfPR: 0.2", "PfPR: 0.4")
+names(supp.labs) <- c(0.1, 0.2, 0.4)
+
+ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_line(data=test, aes(group=as.factor(ID)), color='lightgrey') +
+  geom_point(data=ITNboost, aes(color='ITN boost (10%)', alpha=ITNuse), size=1.3) +
+  geom_point(data=ITNpbo, aes(color='ITN PBO', alpha=ITNuse), size=1.3) +
+  geom_point(data=SMC, aes(color='SMC alone', alpha=ITNuse), size=1.3) +
+  geom_point(data=RTSSSV, aes(color='RTS,S SV alone ($5)', alpha=ITNuse), size=1.3) +
+  geom_point(data=RTSSEPI, aes(color='RTS,S EPI alone ($5)', alpha=ITNuse), size=1.3) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  facet_grid(seasonality~pfpr, labeller = labeller(pfpr=supp.labs)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(y='change in cost (USD)',
+       x='change in DALYs averted',
+       color='intervention',
+       title='intervention impact',
+       alpha="baseline ITN usage",
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
+
+ggsave('./03_output/impact_cloudII.pdf', width=10, height=7)
+
 
 
 # resistance ITNs --------------------------------------------------------------
 output <- dalyoutput_cost %>%
   filter(RTSS=='none' & (SMC==0 | (seasonality=='highly seasonal'))) %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62)
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(ITNuse > 0)
 
 none <- output %>%
   filter(ITNboost==0 & ITN=='pyr' & resistance==0) %>%
@@ -260,31 +204,51 @@ none <- output %>%
          cost__total_baseline = cost_total)
 
 output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
-  mutate(deltadaly = abs(daly_baseline - daly),
+  mutate(deltadaly = daly_baseline - daly,
          deltacost = cost_total - cost__total_baseline,
          cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
 
+output <- output %>% group_by(pfpr, seasonality, ITN, ITNuse, resistance) %>%
+  filter(!(ITN=='pyr'& ITNboost==0)) %>%
+  mutate(ITNintervention = case_when(ITN=="pbo"~'pbo',
+                                     ITNboost==1~'boost',
+                                     TRUE~NA_character_)) %>%
+  mutate(ID = paste0(pfpr, seasonality, ITNuse, resistance, sep="_"))
+
+table(test$ITNintervention, useNA ='always')
+table(test$ID)
+table(test$ITNboost, test$ITN)
+
 ITNboost <- output %>% filter(ITNboost==1)
+table(ITNboost$ITN) # only pyr nets
 
 ITNpbo <- output %>% filter(ITN=='pbo')
+table(ITNpbo$ITN) # only pbo nets
 
-ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
-  geom_point(data=ITNboost, aes(color='ITN boost', alpha=pfpr)) +
-  geom_point(data=ITNpbo, aes(color='ITN PBO', alpha=pfpr)) +
+
+# plot
+ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_line(data=output, aes(group=as.factor(ID)), alpha=.5) +
+  geom_point(data=ITNboost, aes(color='ITN PYR 10% boost', alpha=pfpr), size=1.2) +
+  geom_point(data=ITNpbo, aes(color='ITN PBO switch', alpha=pfpr), size=1.2) +
   geom_hline(yintercept = 0, lty=2, color="black") +
   geom_vline(xintercept = 0, lty=2, color="black") +
+  # geom_smooth(data=ITNboost, method='lm', se=F, aes(color='ITN PYR 10% boost')) +
+  # geom_smooth(data=ITNpbo, method='lm', se=F, aes(color='ITN PBO switch')) +
   theme_classic() +
-  facet_wrap(~resistance) +
-  labs(x='change in cost (USD)',
-       y='change in DALYs',
+  facet_grid(ITNuse~resistance,
+             labeller = label_both) +
+  labs(y='change in cost (USD)',
+       x='change in DALYs averted',
        color='intervention',
        alpha='PfPR',
-       title='intervention impact',
+       title='Insecticide resistance',
        subtitle='matched on seasonality, PfPR, and ITN usage',
        caption='')
 
-table(output$ITNboost, output$ITN) # check ITNboost and ITN type relationship
-table(output$seasonality, output$pfpr)
+ggsave('./03_output/resistanceI.pdf', width=10, height=8)
+
+
 
 test <- output %>% filter(!(ITN=='pyr' & ITNboost==0)) %>% filter(ITNuse>0) %>%
   mutate(ITN = ifelse(ITN=='pyr', "pyrethroid boost (10%)", "pyrethroid + PBO"),
@@ -304,49 +268,18 @@ ggplot(data = test, aes(x=factor(scenario), y=deltadaly, alpha=factor(resistance
   geom_col(aes(fill=ITN), position=position_dodge()) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  facet_wrap(seasonality~pfpr) +
+  facet_grid(seasonality~pfpr) +
+  scale_alpha_discrete(range = c(.4, 1)) +
   labs(x='scenario: ITNuse - resistance',
-       y='change in DALYs',
+       y='change in DALYs averted',
        fill='ITN',
        alpha = 'resistance',
        title='Insecticide resistance',
        subtitle='matched on seasonality, PfPR, and ITN usage',
        caption='faceted by seasonality and PfPR')
 
-ggsave('./03_output/resistance.pdf', width=8, height=5)
+ggsave('./03_output/resistanceII.pdf', width=8, height=5)
 
-
-# cost per DALY averted --------------------------------------------------------
-output <- dalyoutput_cost %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62)
-
-none <- output %>%
-  filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
-  select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
-  rename(daly_baseline = daly,
-         cost__total_baseline = cost_total)
-
-output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
-  mutate(deltadaly = abs(daly_baseline - daly),
-         deltacost = cost_total - cost__total_baseline,
-         cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
-
-ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
-  geom_point(data=ITNboost, aes(color='ITN boost')) +
-  geom_point(data=ITNpbo, aes(color='ITN PBO')) +
-  geom_point(data=SMC, aes(color='SMC alone')) +
-  geom_point(data=RTSS, aes(color='RTS,S alone')) +
-  geom_hline(yintercept = 0, lty=2, color="black") +
-  geom_vline(xintercept = 0, lty=2, color="black") +
-  theme_classic() +
-  labs(x='change in cost (USD)',
-       y='change in DALYs',
-       color='intervention',
-       title='intervention impact',
-       subtitle='matched on seasonality, PfPR, and ITN usage',
-       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
-
-ggsave('./03_output/daly_averted.pdf', width=8, height=5)
 
 
 # RTS,S cost -------------------------------------------------------------------
