@@ -114,7 +114,6 @@ runsimGF <- function(population,        # simulation population
     ITNuse2 = ITNuse1
   }
 
-  if (ITNuse > 0) {
   npre <- ceiling(warmup/(3*year))      # number of distributions during warmup
   npost <- ceiling(sim_length/(3*year)) # number of distributions during sim_length
 
@@ -143,7 +142,6 @@ runsimGF <- function(population,        # simulation population
 
   bednet_timesteps <- params$bednet_timesteps - warmup
 
-  }
 
   # IRS ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w Table 3

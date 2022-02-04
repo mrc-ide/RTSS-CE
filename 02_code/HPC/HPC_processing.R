@@ -55,7 +55,7 @@ dat3 <- dat2 %>%
                         n_inc_clinical_0_182.5:n_inc_clinical_36500_73000,
                         n_inc_severe_0_182.5:n_inc_severe_36500_73000),
                names_to = c('age'), values_to = c('value')) %>%
-  mutate(n = ifelse(grepl('n_[[:digit:]]', age), value, NA),                        # creating var for age group
+  mutate(n = ifelse(grepl('n_[[:digit:]]', age), value, NA),             # creating var for age group
          inc_clinical = ifelse(grepl('n_inc_clinical', age), value, NA), # creating var for inc_clinical
          inc_severe = ifelse(grepl('n_inc_severe', age), value, NA),     # creating var for inc_severe
          age = gsub('n_inc_clinical_', '', age),                         # combining age vars

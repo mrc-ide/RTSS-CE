@@ -5,9 +5,8 @@ setwd('Q:/GF-RTSS-CE')
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
 
-source('./02_code/HPC/functions.R')
+source('./02_code/HPC/functions.R') # reference functions
 
-# remotes::install_github('mrc-ide/malariasimulation@test/severe_demography', force=T)
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
 ctx <- context::context_save(path = "Q:/contexts",
@@ -25,18 +24,17 @@ config <- didehpc::didehpc_config(shares = share,
 obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
 
 
-
 # Set up your job --------------------------------------------------------------
 library(tidyverse)
 year <- 365
 
 # population
-population <- 10000
+population <- 100000
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
 # g0 = a0, a = g, b = h
-pfpr <- c(.10,.20,.40) # start at 10% (min rec for RTSS use)
+pfpr <- c(.10, .20, .40) # start at 10% (min rec for RTSS use)
 
   # FIRST
   seas_name <- 'highly seasonal'
@@ -56,46 +54,47 @@ pfpr <- c(.10,.20,.40) # start at 10% (min rec for RTSS use)
 stable <- rbind(s1, s2, s3)
 
 # vectors: list(arab_params, fun_params, gamb_params)
-speciesprop <- data.frame(speciesprop = rbind(list(c(0.25,0.25,0.5))),
+speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
 # run time
-warmup <- 9*year # needs to be multiple of 3 so bednets will line up with first timestep
+warmup <- 6*year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
 sim_length <- 20*year
 
 # interventions
 ITN <- c('pyr', 'pbo')
-ITNuse <- c(0,0.25,0.50,0.75)
+ITNuse <- c(0,0.25, 0.50, 0.75)
 ITNboost <- c(0,1)
 resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
 treatment <- c(0.45)
 SMC <- c(0,0.85)
 RTSS <- c("none", "EPI", "SV") # leave out hybrid for now
-RTSScov <- c(0,0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46% first half of 2021
-fifth <- c(0) # one booster for now
+RTSScov <- c(0, 0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46%; first half of 2021
+fifth <- c(0) # only one booster for now
 
 interventions <-
   crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth)
 
 name <- "test"
 
-# COMBINE into all combinations of runs
+# create combination of all runs and remove non-applicable scenarios
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
   mutate(name = paste0(name, "_", row_number())) %>%
-  filter(!(RTSS=="none" & RTSScov >0)) %>% # can't have coverage when no RTSS
-  filter(!(RTSScov==0 & (RTSS=="EPI" | RTSS=='SV' | RTSS=="hybrid"))) %>% # no 0 coverage & RTSS
-  filter(!(fifth==1 & (RTSS=="EPI" | RTSS=='none'))) %>% # no fifth doses with EPI or none
-  filter(!(SMC>0 & seas_name=="perennial")) %>% # do not administer SMC in perennial settings
-  filter(!(SMC==0 & seas_name=="highly seasonal")) %>% # always SMC in highly seasonal settings
-  filter(!(ITNuse==0 & resistance !=0)) %>% # can't have resistance levels when ITNuse= 0
-  filter(!(ITN=='pbo' & ITNboost==1)) # no boost AND PBO combinations
+  filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set coverage when no RTSS
+  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) %>% # no 0 coverage & RTSS
+  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) %>% # no fifth doses with EPI or none
+  filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
+  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always SMC in highly seasonal settings
+  filter(!(ITNuse == 0 & resistance != 0)) %>% # can't have resistance levels when ITNuse == 0
+  filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # no boost AND PBO combinations
+  filter(!(ITN == 'pbo' & ITNuse == 0)) # can't switch to pbo with 0 net use
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC/EIRestimates.rds")
 
 combo <- combo %>% left_join(match %>% select(-ITN)) %>%
-  # put into correct order of function arguments
+  # put variables into the same order as function arguments
   select(population,        # simulation population
          seasonality,       # seasonal profile
          seas_name,         # name of seasonal profile
@@ -125,12 +124,12 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   select(-f, -exist)
 
 # to run for test
-# combo <- combo %>% filter(RTSS == "SV" & SMC == 0.85 & ITNuse == 0.50 & ITNboost == 0 & resistance == 0)
 t <- obj$enqueue_bulk(combo, runsimGF)
 t$status()
 
 beepr::beep(1)
 
+# ------------------------------------------------------------------------------
 
 # test run by hand
 # x <- 4
@@ -144,11 +143,12 @@ beepr::beep(1)
 #                  speciesprop = combo[[x,8]],
 #                  ITN = combo[[x,9]],
 #                  ITNuse = combo[[x,10]],
-#                  resistance = combo[[x,11]],
-#                  IRS = combo[[x,12]],
-#                  treatment = combo[[x,13]],
-#                  SMC = combo[[x,14]],
-#                  RTSS = combo[[x,15]],
-#                  RTSScov = combo[[x,16]],
-#                  fifth = combo[[x,17]],
-#                  name = combo[[x,18]])
+#                  ITNboost = combo[[x,11]],
+#                  resistance = combo[[x,12]],
+#                  IRS = combo[[x,13]],
+#                  treatment = combo[[x,14]],
+#                  SMC = combo[[x,15]],
+#                  RTSS = combo[[x,16]],
+#                  RTSScov = combo[[x,17]],
+#                  fifth = combo[[x,18]],
+#                  name = combo[[x,19]])
