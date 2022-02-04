@@ -57,23 +57,27 @@ daly_components <- function(x,
                             weight3 = 0.172,      # Disability weight age group 3
                             severe_weight = 0.6){ # Disability weight severe malaria
   x %>%
-    dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
-                  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
-                  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+    dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
+                  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
+                  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
 
-                  yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper/365 > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
 
-                  yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld_lower = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper/365 > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
 
-                  yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
+                  yld_upper = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper/365 > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
 
     dplyr::mutate(daly = yll + yld)
+
+  # Need to make lifespan more specific
+  # Some age groups appear to go up to 200 years (if in days)?
+
 }
 
 # run functions
@@ -145,7 +149,15 @@ nets_distributed <-
     distribution_freq = unique(dalyoutput_cost$bednet_distribution_frequency)[
       !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
     use_rate_data = max(nets_data$use_rate_by_country$use_rate),
-    half_life_data = median(nets_data$half_life_data$half_life))
+    half_life_data = median(nets_data$half_life_data$half_life),
+    extrapolate_npc = "loess",
+    net_loss_function = net_loss_exp)
+
+# Assumptions to be revised and discussed:
+# Using median half life
+# Using maximum use rate (with median, can only go up to usage of 81%)
+# Extrapolating Loess curve according to curve trend
+# Assuming exponential net loss
 
 # save output in case changes in package require changes in code:
 # saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
