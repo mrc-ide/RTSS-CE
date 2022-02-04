@@ -1,14 +1,9 @@
 # Figures & Tables -------------------------------------------------------------
 # packages
 library(tidyverse)
-library(fuzzyjoin)
-library(plotly)
-library(kableExtra)
 library(malariasimulation)
 library(data.table)
-
 library(patchwork)
-library(scales)
 library(LaCroixColoR)
 
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
@@ -305,31 +300,65 @@ ggplot(scenarios_univariate) +
 ggsave('./03_output/interventionCE_density.pdf', width=8, height=5)
 
 
-# RTS,S cost -------------------------------------------------------------------
-cost_per_dose2 <- seq(1,10,1)
+# per dose RTS,S cost -------------------------------------------------------------------
+# set up cost vector
+cost_per_dose2 <- seq(-50,100,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
 
+# pull out univariate scenarios
 output <- scenarios %>% filter(intervention != 'mixed') %>%
-  select(file:dose4, daly, ITNcost:intervention) %>%
+  select(file:dose4, daly, ITNcost:intervention) %>% merge(cost_per_dose2) %>%
+  mutate(cost_vax2 = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose2),
+         cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax2)
+
+# checks
+test <- output %>% filter(RTSS=='SV' & pfpr==0.2 & seasonality=='seasonal') %>%
+  select(cost_per_dose, delivery_cost, cost_vax, cost_per_dose2, cost_vax2) %>%
+  mutate(checkdosecost=(cost_per_dose+delivery_cost)/cost_per_dose2,
+         checkvaxcost=cost_vax/cost_vax2)
+
+table(test$checkdosecost, test$checkvaxcost) # fractions should be the same
+
+output %>% group_by(ID) %>% summarize(n=n())
+
+# rank order CE
+test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_dose2, intervention, daly, daly_baseline, cost_total2, cost_total_baseline) %>%
+  mutate(CE = (cost_total2 - cost_total_baseline) / (daly_baseline - daly)) %>%
+  ungroup() %>%
+  group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
+  arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
+  slice_head(n = 1) %>%
+  mutate(rank = ifelse(intervention %in% c('RTSS EPI', 'RTSS SV'), cost_per_dose2, NA)) %>%
+  group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
+  summarize(rank2 = max(rank, na.rm=T))
+
+table(test$rank2)
+test2 <- test %>% filter(pfpr==0.2 & seasonality=='seasonal' & resistance==0 & ITNuse==0.5)
+
+ggplot(data=test) +
+  geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
+  theme_classic() +
+  labs(x='RTS,S cost (USD)',
+       y='count',
+       fill='resistance',
+       title='Distribution of the maximium cost per dose where \nRTS,S is the most cost efficient strategy',
+       caption='14 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)') +
+  scale_x_continuous(breaks=seq(-30,10,10), limits=c(-30,10))
+
+ggsave('./03_output/RTSS_price_dist.pdf', width=5, height=3)
 
 
-
-# cost_per_dose <- c(2.69, 6.52, 12.91)
-# delivery_cost <- c(0.96, 1.62, 2.67)
-cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
-
-cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)
 
 
 # IDEAS ###########
-- resistance - ITNs, upgrading to PBO and boosting. no SMC add ins or RTSS
-
-- ITN change vs. SMC vs. RTSS in seasonal settings
-- ITN change vs. RTSS in highly seasonal settings
-- ITN change vs RTSS in perennial settings
-
-- RTSS changing cost - bar charts
-
-- looking at the effects of ITN boost, ITN change, SMC introduction, RTSS - scatter plot with change in CE and change in impact
+# - resistance - ITNs, upgrading to PBO and boosting. no SMC add ins or RTSS
+#
+# - ITN change vs. SMC vs. RTSS in seasonal settings
+# - ITN change vs. RTSS in highly seasonal settings
+# - ITN change vs RTSS in perennial settings
+#
+# - RTSS changing cost - bar charts
+#
+# - looking at the effects of ITN boost, ITN change, SMC introduction, RTSS - scatter plot with change in CE and change in impact
 ##################
 
 
