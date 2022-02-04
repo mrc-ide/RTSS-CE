@@ -21,6 +21,7 @@ dat <- readRDS("./03_output/rtss_raw.rds")
 averted <- readRDS("./03_output/rtss_avert.rds")
 dalyoutput <- readRDS('./03_output/dalyoutput.rds')
 dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
+scenarios <- readRDS('./03_output/scenarios.rds')
 
 
 # seasonality II ---------------------------------------------------------------
@@ -40,7 +41,6 @@ colnames(RTSStime) <- "rtss"
 
 ITNtime <- do.call(cbind.data.frame, interventiontime$bednet_timesteps)
 colnames(ITNtime) <- "itn"
-
 
 ggplot(data = output) +
   geom_line(aes(x=month, y=n_inc_clinical_182.5_1825/n_182.5_1825), alpha = 0.8) +
@@ -64,10 +64,10 @@ output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0
 
 SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
   group_by(smc_timesteps, seasonality, pfpr) %>%
-  mutate(t1 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[1]], unlist(smc_timesteps)[[37]]),
-         t2 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[2]], unlist(smc_timesteps)[[38]]),
-         t3 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[3]], unlist(smc_timesteps)[[39]]),
-         t4 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[4]], unlist(smc_timesteps)[[40]]),
+  mutate(t1 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[1]], unlist(smc_timesteps)[[25]]),
+         t2 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[2]], unlist(smc_timesteps)[[26]]),
+         t3 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[3]], unlist(smc_timesteps)[[27]]),
+         t4 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[4]], unlist(smc_timesteps)[[28]]),
          t5 = ifelse(seasonality=='seasonal', unlist(smc_timesteps)[[5]], NA)) %>%
   distinct() %>%
   pivot_longer(cols=t1:t5, names_to = "time", values_to = "smc") %>%
@@ -81,7 +81,7 @@ RTSStime <- output %>% select(rtss_mass_timesteps, seasonality, pfpr) %>%
 
 ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
   group_by(bednet_timesteps, seasonality, pfpr) %>%
-  mutate(itn = unlist(bednet_timesteps)[[4]]) %>%
+  mutate(itn = unlist(bednet_timesteps)[[3]]) %>%
   distinct() %>%
   mutate(itn = itn / (365/12) + 1)
 
@@ -116,12 +116,12 @@ none <- output %>%
   filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
   select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
   rename(daly_baseline = daly,
-         cost__total_baseline = cost_total)
+         cost_total_baseline = cost_total)
 
 output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
   mutate(deltadaly = daly_baseline - daly,
-         deltacost = cost_total - cost__total_baseline,
-         cost_daly_averted = (cost_total - cost__total_baseline) / deltadaly)
+         deltacost = cost_total - cost_total_baseline,
+         cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly)
 
 ITNboost <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITNboost==1) %>% filter(resistance==0) %>% mutate(intervention='boost')
 
@@ -163,6 +163,8 @@ test <- rbind(ITNboost, ITNpbo, SMC, RTSSSV, RTSSEPI) %>%
   mutate(ID = paste(seasonality, pfpr, ITNuse, sep="_"))
 
 table(test$ID)
+summary(test$deltadaly)
+negvalues <- test %>% filter(deltadaly<0)
 
 supp.labs <- c("PfPR: 0.1", "PfPR: 0.2", "PfPR: 0.4")
 names(supp.labs) <- c(0.1, 0.2, 0.4)
@@ -281,14 +283,41 @@ ggplot(data = test, aes(x=factor(scenario), y=deltadaly, alpha=factor(resistance
 ggsave('./03_output/resistanceII.pdf', width=8, height=5)
 
 
+# density plot -----------------------------------------------------------------
+
+scenarios_univariate <- scenarios %>% filter(intervention != 'mixed') %>%
+  select(file, ID, intervention, CE) %>%
+  arrange(ID, CE)
+
+summary(scenarios_univariate$CE)
+
+ggplot(scenarios_univariate) +
+  #geom_histogram(aes(x=CE, fill=intervention), binwidth = 1) +
+  geom_density(aes(x=CE, y=..count..,
+                   fill=intervention, color=intervention, group=intervention), alpha=0.2) +
+  scale_x_continuous(limits=c(-1000, 1000)) +
+  labs(x=expression(paste(Delta," cost / ", Delta, " DALYs")),
+       y='density (count)',
+       title='density plot of intervention cost-effectiveness',
+       caption='range in x = -8031 to 19809') +
+  theme_classic()
+
+ggsave('./03_output/interventionCE_density.pdf', width=8, height=5)
+
 
 # RTS,S cost -------------------------------------------------------------------
-output <- dalyoutput_cost %>%
-  filter(delivery_cost==1.62)
+cost_per_dose2 <- seq(1,10,1)
+
+output <- scenarios %>% filter(intervention != 'mixed') %>%
+  select(file:dose4, daly, ITNcost:intervention) %>%
+
+
 
 # cost_per_dose <- c(2.69, 6.52, 12.91)
 # delivery_cost <- c(0.96, 1.62, 2.67)
+cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
 
+cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)
 
 
 # IDEAS ###########

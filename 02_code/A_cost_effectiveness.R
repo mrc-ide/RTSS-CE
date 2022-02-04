@@ -143,6 +143,41 @@ dalyoutput_cost <- dalyoutput %>%
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
 
+# group data by scenarios ------------------------------------------------------
+
+output <- dalyoutput_cost %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  mutate(ID = paste0(pfpr, seasonality, ITNuse, sep="_")) # create unique identifier
+
+# there should be 36 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage
+none <- output %>%
+  filter(ITNboost==0 & ITN=='pyr' & resistance==0 & RTSS=='none' & # filter out interventions
+           (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  rename(daly_baseline = daly,
+         cost_total_baseline = cost_total) %>%
+  select(file, ID, daly_baseline, cost_total_baseline)
+
+base_IDs <- none$file
+
+scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
+  left_join(none %>% select(-file), by=c('ID')) %>%
+  mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly)) %>% # ICER
+  mutate(intervention = case_when(
+    ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN PBO',
+    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN 10% boost',
+    ITN=='pyr' & ITNboost==0 & SMC==0.85 & seasonality=='seasonal' & RTSS=='none' ~ 'SMC',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTSS SV',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTSS EPI',
+    TRUE ~ 'mixed'))
+
+# inspect range of scenarios
+table(scenarios$ID)
+summary(scenarios$CE)
+table(scenarios$ID, scenarios$intervention) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
+
+saveRDS(scenarios, './03_output/scenarios.rds')
+
+
 # data checks ##################################################################
 
 # prev & daly
@@ -181,6 +216,10 @@ table(dalyoutput_cost$seasonality, dalyoutput_cost$smc_timesteps)
 # ITNs are stable
 table(dalyoutput_cost$ITNuse, dalyoutput_cost$bednet_timesteps)
 
+test <- scenarios %>% mutate(deltadaly = cost_total - cost_total_baseline)
+summary(test$deltadaly)
+test <- test %>% filter(deltadaly < 0)
+table(test$resistance)
 
 ################################################################################
 
