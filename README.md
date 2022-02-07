@@ -23,6 +23,12 @@ Strategic resource allocation to maximize the impact of malaria response.
 .
 ├── 01_data                            # Data files
 ├── 02_code                            # R code file
+|   ├── A_cost_effectiveness.R         # Cost-effectiveness code
+|   ├── B_figures_tables.R             # Figures and tables
+|   ├── MISC_ITN_PR_distributions.R    # Visualizing world ITN use and PfPR patterns
+|   ├── MISC_seasonality_script.R      # Visualizing timing of seasonal interventions
+|   ├── MISC_SMCdosetest.R             # Determining which SMC profiles should be used
+|   ├── MISC_warmup_time_test.R        # Determining the warmup time needed
 |   ├── HPC                            # Copy of Q: drive folder for HPC runs
 |   |   ├── functions.R                # Functions
 |   |   ├── PfPR_EIR_match.R           # Matching model PfPR outputs to EIRs
