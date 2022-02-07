@@ -1,10 +1,10 @@
 # Cost effectiveness -----------------------------------------------------------
 library(tidyverse)
-#devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
+# devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
 library(netz)
 
 # pull in data from simulation runs (all interventions)
-dalyoutput <- readRDS("03_output/rtss_long.rds") %>%
+dalyoutput <- readRDS("./03_output/rtss_long.rds") %>%
   separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
   mutate(age_lower = as.numeric(age_lower)/365,
          age_upper = as.numeric(age_upper)/365,
@@ -57,21 +57,21 @@ daly_components <- function(x,
                             weight3 = 0.172,      # Disability weight age group 3
                             severe_weight = 0.6){ # Disability weight severe malaria
   x %>%
-    dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
-                  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
-                  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower/365 + .data$age_upper/365) / 2)),
+    dplyr::mutate(yll = .data$deaths * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+                  yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
+                  yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
 
-                  yld = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                         .data$age_upper/365 > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                         .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
 
-                  yld_lower = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper/365 > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
+                  yld_lower = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_lower * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_lower * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_lower * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
 
-                  yld_upper = dplyr::case_when(.data$age_upper/365 <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper/365 > 5 & .data$age_upper/365 <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
-                                               .data$age_upper/365 > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
+                  yld_upper = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases_upper * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases_upper * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
+                                               .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
 
     dplyr::mutate(daly = yll + yld)
 
@@ -104,7 +104,7 @@ saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 # costs
 # https://github.com/mrc-ide/gf/blob/master/data/unit_costs.rda
 # https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
-load('01_data/unit_costs.rda')
+load('./01_data/unit_costs.rda')
 
 PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered
 PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered
