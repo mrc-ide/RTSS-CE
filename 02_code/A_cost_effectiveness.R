@@ -61,6 +61,10 @@ daly_components <- function(x,
                   yll_lower = .data$deaths_lower * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
                   yll_upper = .data$deaths_upper * (lifespan - ((.data$age_lower + .data$age_upper) / 2)),
 
+                  yll = ifelse(yll < 0, 0, yll),                    # should be no negative yll from older age groups
+                  yll_lower = ifelse(yll_lower < 0, 0, yll_lower),  # should be no negative yll from older age groups
+                  yll_upper =  ifelse(yll_upper < 0, 0, yll_upper), # should be no negative yll from older age groups
+
                   yld = dplyr::case_when(.data$age_upper <= 5 ~ .data$cases * episode_length * weight1 + .data$severe_cases * severe_episode_length * severe_weight,
                                          .data$age_upper > 5 & .data$age_upper <= 15 ~ .data$cases * episode_length * weight2 + .data$severe_cases * severe_episode_length * severe_weight,
                                          .data$age_upper > 15 ~ .data$cases * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight),
@@ -85,6 +89,12 @@ dalyoutput <- mortality_rate(dalyoutput)
 dalyoutput <- outcome_uncertainty(dalyoutput)
 dalyoutput <- daly_components(dalyoutput)
 
+# check that there are no negative values
+summary(dalyoutput$yll)
+summary(dalyoutput[dalyoutput$yll==0,]$yll_lower)
+summary(dalyoutput[dalyoutput$yll==0,]$yll_upper)
+summary(dalyoutput$yld)
+
 # consolidate across ages
 dalyoutput <- dalyoutput %>%
   select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
@@ -106,11 +116,11 @@ saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 # https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
 load('./01_data/unit_costs.rda')
 
-PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered
-PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered
+PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered      # 5.13
+PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered # 7.05
 TREATcost <- 1.47          # clinical treatment cost
 SEVcost <- 22.41           # severe treatment cost
-SMCcost <- unit_costs$cost_per_smc_dose_delivered
+SMCcost <- unit_costs$cost_per_smc_dose_delivered           # 1.44
 cost_per_dose <- c(2.69, 6.52, 12.91)
 delivery_cost <- c(0.96, 1.62, 2.67)
 
@@ -127,7 +137,7 @@ dalyoutput_cost <- dalyoutput %>%
          ITNcost = case_when(ITN=='pyr' ~ PYRcost,        # account for ITN type-specific cost
                              ITN=='pbo' ~ PBOcost)) %>%
 
-  # count the number of interventions administered
+  # count the number of interventions administered and the frequency of ITN dist
   mutate(bednet_distribution_frequency = as.numeric(lapply(lapply(bednet_timesteps,diff), unique)),
          bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
          smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps)),
@@ -138,11 +148,16 @@ dalyoutput_cost <- dalyoutput %>%
 
   ungroup() %>% rowwise()
 
-# Read in netz package data to find the annual nets to distribute to give the simulated usage
+
+# check that the number of ITN distribution times is correct for ITNuse2 == 0.1
+dalyoutput_cost %>% filter(ITNboost==1 & ITNuse==0) %>% group_by(bednet_timesteps) %>% summarize()
+
+
+# read in netz package data to find the annual nets to distribute to give the simulated usage
 nets_data <- netz::prepare_data()
 
-# Get nets to be distributed for each ITN usage
-# Assume maximum observed use rate and median bednet half life (across Africa)
+# get nets to be distributed for each ITN usage
+# assume maximum observed use rate and median bednet half life (across Africa)
 nets_distributed <-
   convert_usage_to_annual_nets_distributed(
     target_usage = unique(dalyoutput_cost$ITNuse2),
@@ -158,9 +173,10 @@ nets_distributed <-
 # Using maximum use rate (with median, can only go up to usage of 81%)
 # Extrapolating Loess curve according to curve trend
 # Assuming exponential net loss
+# check calculations excluding negative DALYS
 
 # save output in case changes in package require changes in code:
-# saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
+saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
 
 # create cost variables
 dalyoutput_cost <- dalyoutput_cost %>%
@@ -170,11 +186,7 @@ dalyoutput_cost <- dalyoutput_cost %>%
                                                     annual_percapita_nets_distributed),
          cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 *
            ITNcost,  # true net cost accounting for non-linear relationship
-         bednet_timesteps = ifelse(ITNuse2==0.1,
-                                   sim_length/unique(dalyoutput_cost$bednet_distribution_frequency)[
-                                     !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
-                                   bednet_timesteps),  # correct distribution timesteps where ITNuse of 0 was boosted
-         cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,                 # ITN
+         cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,          # ITN linear
          cost_clinical = (cases-severe_cases) * treatment * TREATcost,                 # non-severe treatment
          cost_severe = severe_cases * treatment * SEVcost,                             # severe treatment
          cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
@@ -206,16 +218,35 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
   left_join(none %>% select(-file), by=c('ID')) %>%
   mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly)) %>% # ICER
   mutate(intervention = case_when(
+
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'none',
+
     ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN PBO',
     ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN 10% boost',
-    ITN=='pyr' & ITNboost==0 & SMC==0.85 & seasonality=='seasonal' & RTSS=='none' ~ 'SMC',
-    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTSS SV',
-    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTSS EPI',
-    TRUE ~ 'mixed'))
+    ITN=='pyr' & ITNboost==0 & (SMC==0.85 & seasonality=='seasonal') & RTSS=='none' ~ 'SMC',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTS,S SV',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTS,S EPI',
+
+    ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN PBO + SMC',
+    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN 10% boost + SMC',
+
+    ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS!='none' ~ 'ITN PBO + RTS,S',
+    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS!='none' ~ 'ITN 10% boost + RTS,S',
+
+    ITN=='pyr' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'RTS,S + SMC',
+    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN 10% boost + RTS,S + SMC',
+    ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN PBO + RTS,S + SMC')) %>%
+
+  mutate(intervention = factor(intervention, levels=c('none', 'ITN 10% boost', 'ITN PBO', 'RTS,S EPI', 'RTS,S SV', 'SMC', 'ITN 10% boost + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% boost + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC', 'ITN PBO + RTS,S + SMC')))
+
+# check intervention
+table(scenarios$intervention, useNA='always')
+
 
 # inspect range of scenarios
 table(scenarios$ID)
 summary(scenarios$CE)
+test <- scenarios %>% filter(CE<0)
 table(scenarios$ID, scenarios$intervention) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
 
 saveRDS(scenarios, './03_output/scenarios.rds')
@@ -259,10 +290,14 @@ table(dalyoutput_cost$seasonality, dalyoutput_cost$smc_timesteps)
 # ITNs are stable
 table(dalyoutput_cost$ITNuse, dalyoutput_cost$bednet_timesteps)
 
-test <- scenarios %>% mutate(deltadaly = cost_total - cost_total_baseline)
+# no negative DALYs
+summary(dalyoutput_cost$daly)
+
+# DALYs averted dist
+test <- scenarios %>% mutate(deltadaly = daly_baseline - daly)
 summary(test$deltadaly)
 test <- test %>% filter(deltadaly < 0)
-table(test$resistance)
+table(test$resistance) # most negative DALYs are in the high resistance scenarios
 
 # double-check relationship between cost_ITN_linear and cost_ITN:
 # similar at low usage but divering at higher usage

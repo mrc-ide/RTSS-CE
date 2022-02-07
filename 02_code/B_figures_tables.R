@@ -104,46 +104,22 @@ ggsave('./03_output/seasonalityIII.pdf', width=10, height=5)
 # cost_per_dose <- c(2.69, 6.52, 12.91)
 # delivery_cost <- c(0.96, 1.62, 2.67)
 
-output <- dalyoutput_cost %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62)
-
-none <- output %>%
-  filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
-  select(seasonality, pfpr, ITNuse, daly, cost_total) %>%
-  rename(daly_baseline = daly,
-         cost_total_baseline = cost_total)
-
-output <- output %>% left_join(none, by=c('seasonality', 'pfpr', 'ITNuse')) %>%
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
+  filter(intervention!='none') %>%
   mutate(deltadaly = daly_baseline - daly,
          deltacost = cost_total - cost_total_baseline,
          cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly)
 
-ITNboost <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITNboost==1) %>% filter(resistance==0) %>% mutate(intervention='boost')
-
-ITNpbo <- output %>% filter(RTSS=='none') %>% filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(ITN=='pbo') %>% filter(resistance==0) %>% mutate(intervention='pbo')
-
-SMC <- output %>% filter(RTSS=='none') %>% filter(ITNboost==0 & ITN=='pyr') %>%
-  filter(seasonality!='highly seasonal') %>% filter(resistance==0) %>% filter(SMC==.85) %>% mutate(intervention='smc')
-
-RTSSSV <- output %>% filter(RTSS=='SV') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
-  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0) %>% mutate(intervention='sv')
-
-RTSSEPI <- output %>% filter(RTSS=='EPI') %>% filter(ITNboost!=1 & ITN!='pbo') %>%
-  filter(!(seasonality=='seasonal' & SMC==.85)) %>% filter(resistance==0) %>% mutate(intervention='epi')
-
-ggplot(mapping=aes(x=deltacost, y=deltadaly)) +
-  geom_point(data=ITNboost, aes(color='ITN boost (10%)', alpha=ITNuse, shape=factor(pfpr))) +
-  geom_point(data=ITNpbo, aes(color='ITN PBO', alpha=ITNuse, shape=factor(pfpr))) +
-  geom_point(data=SMC, aes(color='SMC alone', alpha=ITNuse, shape=factor(pfpr))) +
-  geom_point(data=RTSSSV, aes(color='RTS,S SV alone ($5)', alpha=ITNuse, shape=factor(pfpr))) +
-  geom_point(data=RTSSEPI, aes(color='RTS,S EPI alone ($5)', alpha=ITNuse, shape=factor(pfpr))) +
+ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_point(data=output, aes(color=intervention, alpha=ITNuse, shape=factor(pfpr))) +
   geom_hline(yintercept = 0, lty=2, color="black") +
   geom_vline(xintercept = 0, lty=2, color="black") +
   facet_wrap(~seasonality) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  labs(x='change in cost (USD)',
-       y='absolute change in DALYs',
+  labs(y='change in cost (USD)',
+       x='absolute change in DALYs',
        color='intervention',
        title='intervention impact',
        shape="PfPR",
@@ -186,6 +162,24 @@ ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
 
 ggsave('./03_output/impact_cloudII.pdf', width=10, height=7)
 
+# ALL intervention combos
+ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_line(data=output, aes(group=as.factor(ID)), color='lightgrey') +
+  geom_point(data=output, aes(color=intervention, alpha=ITNuse), size=1.3) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  facet_grid(seasonality~pfpr, labeller = labeller(pfpr=supp.labs)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(y='change in cost (USD)',
+       x='change in DALYs averted',
+       color='intervention',
+       title='intervention impact',
+       alpha="baseline ITN usage",
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
+
+ggsave('./03_output/impact_cloudII.pdf', width=10, height=7)
 
 
 # resistance ITNs --------------------------------------------------------------
@@ -294,7 +288,7 @@ ggplot(scenarios_univariate) +
   labs(x=expression(paste(Delta," cost / ", Delta, " DALYs")),
        y='density (count)',
        title='density plot of intervention cost-effectiveness',
-       caption='range in x = -8031 to 19809') +
+       caption=paste0('range in x = ', round(min(scenarios_univariate$CE)), ' to ', round(max(scenarios_univariate$CE)))) +
   theme_classic()
 
 ggsave('./03_output/interventionCE_density.pdf', width=8, height=5)
@@ -341,10 +335,10 @@ ggplot(data=test) +
        y='count',
        fill='resistance',
        title='Distribution of the maximium cost per dose where \nRTS,S is the most cost efficient strategy',
-       caption='14 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)') +
-  scale_x_continuous(breaks=seq(-30,10,10), limits=c(-30,10))
+       caption='13 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)') +
+  scale_x_continuous(breaks=seq(-40,10,10), limits=c(-41,10))
 
-ggsave('./03_output/RTSS_price_dist.pdf', width=5, height=3)
+ggsave('./03_output/RTSS_price_dist.pdf', width=7, height=5)
 
 
 
