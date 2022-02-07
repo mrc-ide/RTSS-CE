@@ -1,8 +1,10 @@
 # Cost effectiveness -----------------------------------------------------------
 library(tidyverse)
+# devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
+library(netz)
 
 # pull in data from simulation runs (all interventions)
-dalyoutput <- readRDS("C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/rtss_long.rds") %>%
+dalyoutput <- readRDS("./03_output/rtss_long.rds") %>%
   separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
   mutate(age_lower = as.numeric(age_lower)/365,
          age_upper = as.numeric(age_upper)/365,
@@ -72,6 +74,10 @@ daly_components <- function(x,
                                                .data$age_upper > 15 ~ .data$cases_upper * episode_length * weight3 + .data$severe_cases * severe_episode_length * severe_weight)) %>%
 
     dplyr::mutate(daly = yll + yld)
+
+  # Need to make lifespan more specific
+  # Some age groups appear to go up to 200 years (if in days)?
+
 }
 
 # run functions
@@ -98,7 +104,7 @@ saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 # costs
 # https://github.com/mrc-ide/gf/blob/master/data/unit_costs.rda
 # https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
-load('C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/01_data/unit_costs.rda')
+load('./01_data/unit_costs.rda')
 
 PYRcost <- unit_costs$cost_per_pyrethoid_net_delivered
 PBOcost <- unit_costs$cost_per_pyrethroid_pbo_net_delivered
@@ -114,7 +120,7 @@ rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delive
 population <- 10000
 sim_length <- 15*365
 
-# add costs to dataset
+# Prepare to add costs to dataset
 dalyoutput_cost <- dalyoutput %>%
 
   mutate(ITNuse2 = ifelse(ITNboost==1, ITNuse + .10, ITNuse), # account for booster coverage
@@ -122,17 +128,53 @@ dalyoutput_cost <- dalyoutput %>%
                              ITN=='pbo' ~ PBOcost)) %>%
 
   # count the number of interventions administered
-  mutate(bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
+  mutate(bednet_distribution_frequency = as.numeric(lapply(lapply(bednet_timesteps,diff), unique)),
+         bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
          smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps)),
          rtss_mass_timesteps = length(Filter(function(x) (x>0 & x<=15*365), rtss_mass_timesteps))) %>%
 
   # merge in RTSS costing dataframe
   merge(rtsscost_df) %>%
 
-  ungroup() %>% rowwise() %>%
+  ungroup() %>% rowwise()
 
-  # create cost variables
-  mutate(cost_ITN = population * ITNuse2 * bednet_timesteps * ITNcost,                 # ITN
+# Read in netz package data to find the annual nets to distribute to give the simulated usage
+nets_data <- netz::prepare_data()
+
+# Get nets to be distributed for each ITN usage
+# Assume maximum observed use rate and median bednet half life (across Africa)
+nets_distributed <-
+  convert_usage_to_annual_nets_distributed(
+    target_usage = unique(dalyoutput_cost$ITNuse2),
+    distribution_freq = unique(dalyoutput_cost$bednet_distribution_frequency)[
+      !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
+    use_rate_data = max(nets_data$use_rate_by_country$use_rate),
+    half_life_data = median(nets_data$half_life_data$half_life),
+    extrapolate_npc = "loess",
+    net_loss_function = net_loss_exp)
+
+# Assumptions to be revised and discussed:
+# Using median half life
+# Using maximum use rate (with median, can only go up to usage of 81%)
+# Extrapolating Loess curve according to curve trend
+# Assuming exponential net loss
+
+# save output in case changes in package require changes in code:
+# saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
+
+# create cost variables
+dalyoutput_cost <- dalyoutput_cost %>%
+  left_join(select(nets_distributed, target_use, annual_percapita_nets_distributed),
+            by=c('ITNuse2' = 'target_use')) %>%
+  mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
+                                                    annual_percapita_nets_distributed),
+         cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 *
+           ITNcost,  # true net cost accounting for non-linear relationship
+         bednet_timesteps = ifelse(ITNuse2==0.1,
+                                   sim_length/unique(dalyoutput_cost$bednet_distribution_frequency)[
+                                     !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
+                                   bednet_timesteps),  # correct distribution timesteps where ITNuse of 0 was boosted
+         cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,                 # ITN
          cost_clinical = (cases-severe_cases) * treatment * TREATcost,                 # non-severe treatment
          cost_severe = severe_cases * treatment * SEVcost,                             # severe treatment
          cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
@@ -141,6 +183,7 @@ dalyoutput_cost <- dalyoutput %>%
          cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)    # TOTAL
 
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
+
 
 
 # group data by scenarios ------------------------------------------------------
@@ -221,5 +264,13 @@ summary(test$deltadaly)
 test <- test %>% filter(deltadaly < 0)
 table(test$resistance)
 
+# double-check relationship between cost_ITN_linear and cost_ITN:
+# similar at low usage but divering at higher usage
+ggplot(dalyoutput_cost) +
+  geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
+  geom_abline(slope=1) +
+  theme_classic()
+
 ################################################################################
+
 
