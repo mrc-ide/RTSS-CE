@@ -4,12 +4,15 @@ library(tidyverse)
 # pull in data from simulation runs (all interventions)
 dalyoutput <- readRDS("C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/rtss_long.rds") %>%
   separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
-  mutate(age_lower = as.numeric(age_lower),
-         age_upper = as.numeric(age_upper),
+  mutate(age_lower = as.numeric(age_lower)/365,
+         age_upper = as.numeric(age_upper)/365,
          inc = inc_clinical / n,
          sev = inc_severe / n,
          cases = inc_clinical,
          severe_cases = inc_severe)
+
+# make sure age is in years for calculating DALYs
+summary(dalyoutput$age_lower); summary(dalyoutput$age_upper)
 
 
 # DALYs ------------------------------------------------------------------------
@@ -120,7 +123,8 @@ dalyoutput_cost <- dalyoutput %>%
 
   # count the number of interventions administered
   mutate(bednet_timesteps = length(Filter(function(x) (x>0 & x<=15*365), bednet_timesteps)),
-         smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps))) %>%
+         smc_timesteps = length(Filter(function(x) (x>0 & x<=15*365), smc_timesteps)),
+         rtss_mass_timesteps = length(Filter(function(x) (x>0 & x<=15*365), rtss_mass_timesteps))) %>%
 
   # merge in RTSS costing dataframe
   merge(rtsscost_df) %>%
@@ -136,6 +140,86 @@ dalyoutput_cost <- dalyoutput %>%
 
          cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax)    # TOTAL
 
-
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
+
+
+# group data by scenarios ------------------------------------------------------
+
+output <- dalyoutput_cost %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  mutate(ID = paste0(pfpr, seasonality, ITNuse, sep="_")) # create unique identifier
+
+# there should be 36 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage
+none <- output %>%
+  filter(ITNboost==0 & ITN=='pyr' & resistance==0 & RTSS=='none' & # filter out interventions
+           (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  rename(daly_baseline = daly,
+         cost_total_baseline = cost_total) %>%
+  select(file, ID, daly_baseline, cost_total_baseline)
+
+base_IDs <- none$file
+
+scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
+  left_join(none %>% select(-file), by=c('ID')) %>%
+  mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly)) %>% # ICER
+  mutate(intervention = case_when(
+    ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN PBO',
+    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN 10% boost',
+    ITN=='pyr' & ITNboost==0 & SMC==0.85 & seasonality=='seasonal' & RTSS=='none' ~ 'SMC',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTSS SV',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTSS EPI',
+    TRUE ~ 'mixed'))
+
+# inspect range of scenarios
+table(scenarios$ID)
+summary(scenarios$CE)
+table(scenarios$ID, scenarios$intervention) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
+
+saveRDS(scenarios, './03_output/scenarios.rds')
+
+
+# data checks ##################################################################
+
+# prev & daly
+none <- dalyoutput_cost %>%
+  filter(ITNboost==0 & RTSS=='none' & ITN=='pyr' & resistance==0 & (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  rename(daly_baseline = daly,
+         cost_total_baseline = cost_total)
+
+  ggplot(none, aes(x=pfpr, y=daly_baseline, color=factor(ITNuse))) +
+  geom_point() +
+  geom_smooth(method = 'lm', se=F) +
+  facet_wrap(~seasonality) + theme_classic() +
+  labs(x='PfPR', y='DALYs', color='ITN use',
+       title = "Baseline scenarios, DALYs by PfPR and seasonality")
+
+  ggplot(none, aes(x=pfpr, y=yll, color=factor(ITNuse))) +
+    geom_point() +
+    geom_smooth(method = 'lm', se=F) +
+    facet_wrap(~seasonality) + theme_classic() +
+    labs(x='PfPR', y='YLL', color='ITN use',
+         title = "Baseline scenarios, YLLs by PfPR and seasonality")
+
+  ggplot(none, aes(x=pfpr, y=yld, color=factor(ITNuse))) +
+    geom_point() +
+    geom_smooth(method = 'lm', se=F) +
+    facet_wrap(~seasonality) + theme_classic() +
+    labs(x='PfPR', y='YLD', color='ITN use',
+         title = "Baseline scenarios, YLDs by PfPR and seasonality")
+
+# RTSS doses are stable
+table(dalyoutput_cost$RTSS, dalyoutput_cost$RTSScov, dalyoutput_cost$rtss_mass_timesteps)
+
+# SMC doses are stable
+table(dalyoutput_cost$seasonality, dalyoutput_cost$smc_timesteps)
+
+# ITNs are stable
+table(dalyoutput_cost$ITNuse, dalyoutput_cost$bednet_timesteps)
+
+test <- scenarios %>% mutate(deltadaly = cost_total - cost_total_baseline)
+summary(test$deltadaly)
+test <- test %>% filter(deltadaly < 0)
+table(test$resistance)
+
+################################################################################
 
