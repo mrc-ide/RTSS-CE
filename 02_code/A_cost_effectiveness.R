@@ -163,17 +163,16 @@ nets_distributed <-
     target_usage = unique(dalyoutput_cost$ITNuse2),
     distribution_freq = unique(dalyoutput_cost$bednet_distribution_frequency)[
       !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
-    use_rate_data = max(nets_data$use_rate_by_country$use_rate),
+    use_rate_data = 0.88,  # minimum use rate able to give 85% usage
     half_life_data = median(nets_data$half_life_data$half_life),
     extrapolate_npc = "loess",
-    net_loss_function = net_loss_exp)
+    net_loss_function = net_loss_map)
 
-# Assumptions to be revised and discussed:
+# Assumptions (decided):
 # Using median half life
-# Using maximum use rate (with median, can only go up to usage of 81%)
+# Using minimum use rate (88%) allowing to give 85% usage (this is between median and max)
 # Extrapolating Loess curve according to curve trend
-# Assuming exponential net loss
-# check calculations excluding negative DALYS
+# Assuming net loss like in MAP paper (smooth compact)
 
 # save output in case changes in package require changes in code:
 saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
@@ -305,6 +304,7 @@ table(test$resistance) # most negative DALYs are in the high resistance scenario
 # similar at low usage but divering at higher usage
 ggplot(dalyoutput_cost) +
   geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
+  facet_wrap(~ITN) +
   geom_abline(slope=1) +
   theme_classic()
 
