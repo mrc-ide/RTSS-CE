@@ -127,7 +127,7 @@ ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
        subtitle='matched on seasonality, PfPR, and ITN usage',
        caption='Assuming resistance == 0, SMC implemented in seasonal settings')
 
-ggsave('./03_output/impact_cloudI.pdf', width=8, height=5)
+ggsave('./03_output/impact_cloudI.pdf', width=8, height=7)
 
 test <- rbind(ITNboost, ITNpbo, SMC, RTSSSV, RTSSEPI) %>%
   group_by(seasonality, pfpr, intervention) %>%
@@ -180,6 +180,36 @@ ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
        caption='Assuming resistance == 0, SMC implemented in seasonal settings')
 
 ggsave('./03_output/impact_cloudII.pdf', width=10, height=7)
+
+# All interventions, by baseline ITNuse and seasonality
+output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','RTS,S SV','ITN 10% boost + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% boost + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
+
+RColorBrewer::brewer.pal(12, "Paired")
+colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
+
+ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_line(data=output, aes(group=as.factor(ID)), color='lightgrey') +
+  geom_point(data=output, aes(color=intervention2), size=1.3) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  facet_grid(seasonality~ITNuse, labeller = labeller(pfpr=supp.labs), scales = "free") +
+  theme_classic() +
+  scale_color_manual(values = colors) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(y='change in cost (USD)',
+       x='change in DALYs averted',
+       color='intervention',
+       title='intervention impact',
+       subtitle='matched on seasonality, PfPR, and ITN usage',
+       caption='Assuming resistance == 0, SMC implemented in seasonal settings')
+
+ggsave('./03_output/impact_cloudIII.pdf', width=15, height=7)
+
+
+table(output$intervention)
+
+test <- output %>% filter(ITNuse==.75, seasonality=='highly seasonal', resistance==0) %>% group_by(ID) %>% summarize(n=n())
+table(test$ITNuse, test$pfpr)
 
 
 # resistance ITNs --------------------------------------------------------------
@@ -274,7 +304,7 @@ ggsave('./03_output/resistanceII.pdf', width=8, height=5)
 
 # density plot -----------------------------------------------------------------
 
-scenarios_univariate <- scenarios %>% filter(intervention != 'mixed') %>%
+scenarios_univariate <- scenarios %>% filter(intervention != 'none') %>%
   select(file, ID, intervention, CE) %>%
   arrange(ID, CE)
 
@@ -283,7 +313,7 @@ summary(scenarios_univariate$CE)
 ggplot(scenarios_univariate) +
   #geom_histogram(aes(x=CE, fill=intervention), binwidth = 1) +
   geom_density(aes(x=CE, y=..count..,
-                   fill=intervention, color=intervention, group=intervention), alpha=0.2) +
+                   fill=intervention, color=intervention, group=intervention), alpha=0.1) +
   scale_x_continuous(limits=c(-1000, 1000)) +
   labs(x=expression(paste(Delta," cost / ", Delta, " DALYs")),
        y='density (count)',
@@ -299,7 +329,7 @@ ggsave('./03_output/interventionCE_density.pdf', width=8, height=5)
 cost_per_dose2 <- seq(-50,100,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
 
 # pull out univariate scenarios
-output <- scenarios %>% filter(intervention != 'mixed') %>%
+output <- scenarios %>% filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
   select(file:dose4, daly, ITNcost:intervention) %>% merge(cost_per_dose2) %>%
   mutate(cost_vax2 = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose2),
          cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax2)
@@ -310,7 +340,7 @@ test <- output %>% filter(RTSS=='SV' & pfpr==0.2 & seasonality=='seasonal') %>%
   mutate(checkdosecost=(cost_per_dose+delivery_cost)/cost_per_dose2,
          checkvaxcost=cost_vax/cost_vax2)
 
-table(test$checkdosecost, test$checkvaxcost) # fractions should be the same
+head(table(test$checkdosecost, test$checkvaxcost)) # fractions should be the same
 
 output %>% group_by(ID) %>% summarize(n=n())
 
@@ -321,12 +351,12 @@ test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_do
   group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
   arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
   slice_head(n = 1) %>%
-  mutate(rank = ifelse(intervention %in% c('RTSS EPI', 'RTSS SV'), cost_per_dose2, NA)) %>%
+  ungroup() %>%
+  mutate(rank = ifelse(intervention %in% c('RTS,S EPI', 'RTS,S SV'), cost_per_dose2, NA)) %>%
   group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
   summarize(rank2 = max(rank, na.rm=T))
 
 table(test$rank2)
-test2 <- test %>% filter(pfpr==0.2 & seasonality=='seasonal' & resistance==0 & ITNuse==0.5)
 
 ggplot(data=test) +
   geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
@@ -335,12 +365,37 @@ ggplot(data=test) +
        y='count',
        fill='resistance',
        title='Distribution of the maximium cost per dose where \nRTS,S is the most cost efficient strategy',
-       caption='13 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)') +
-  scale_x_continuous(breaks=seq(-40,10,10), limits=c(-41,10))
+       caption='13 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8) \n1 scenario where RTS,S is most CE == -$40') +
+  scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10))
 
 ggsave('./03_output/RTSS_price_dist.pdf', width=7, height=5)
 
 
+# ITN dist vs ITN use ----------------------------------------------------------
+# relationship between cost_ITN_linear and cost_ITN:
+summary(dalyoutput_cost$cost_ITN_linear); summary(dalyoutput_cost$cost_ITN)
+
+A <- ggplot(dalyoutput_cost %>% filter(ITN=='pyr')) +
+  geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
+  geom_abline(slope=1) +
+  scale_x_continuous(limits=c(0, 265000)) +
+  scale_y_continuous(limits=c(0, 408000)) +
+  scale_color_gradient(limits=c(0,0.85)) +
+  labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid') +
+  theme_classic()
+
+B <- ggplot(dalyoutput_cost %>% filter(ITN=='pbo')) +
+  geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
+  geom_abline(slope=1) +
+  scale_x_continuous(limits=c(0, 265000)) +
+  scale_y_continuous(limits=c(0, 408000)) +
+  scale_color_gradient(limits=c(0,0.85)) +
+  labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid + PBO') +
+  theme_classic()
+
+A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/ITN_netz.pdf', width=7, height=4)
 
 
 # IDEAS ###########
