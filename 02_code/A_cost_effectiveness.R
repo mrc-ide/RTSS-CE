@@ -239,6 +239,8 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
 
   mutate(intervention = factor(intervention, levels=c('none', 'ITN 10% boost', 'ITN PBO', 'RTS,S EPI', 'RTS,S SV', 'SMC', 'ITN 10% boost + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% boost + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC', 'ITN PBO + RTS,S + SMC')))
 
+table(scenarios$intervention, useNA = 'always')
+
 # check intervention
 table(scenarios$intervention, useNA='always')
 
