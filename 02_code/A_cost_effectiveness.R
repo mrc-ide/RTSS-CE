@@ -197,7 +197,7 @@ saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
 
 
-# group data by scenarios ------------------------------------------------------
+# assign scenarios -------------------------------------------------------------
 
 output <- dalyoutput_cost %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
@@ -208,8 +208,10 @@ none <- output %>%
   filter(ITNboost==0 & ITN=='pyr' & resistance==0 & RTSS=='none' & # filter out interventions
            (SMC==0 | (seasonality=='highly seasonal'))) %>%
   rename(daly_baseline = daly,
-         cost_total_baseline = cost_total) %>%
-  select(file, ID, daly_baseline, cost_total_baseline)
+         cases_baseline = cases,
+         cost_total_baseline = cost_total,
+         ) %>%
+  select(file, ID, daly_baseline, cases_baseline, cost_total_baseline)
 
 base_IDs <- none$file
 
@@ -236,19 +238,21 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
     ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN 10% boost + RTS,S + SMC',
     ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN PBO + RTS,S + SMC')) %>%
 
-  mutate(intervention = factor(intervention, levels=c('none', 'ITN 10% boost', 'ITN PBO', 'RTS,S EPI', 'RTS,S SV', 'SMC', 'ITN 10% boost + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% boost + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC', 'ITN PBO + RTS,S + SMC')))
+  mutate(intervention_f = factor(intervention, levels=c('none', 'ITN 10% boost', 'ITN PBO', 'RTS,S EPI', 'RTS,S SV', 'SMC', 'ITN 10% boost + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% boost + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC', 'ITN PBO + RTS,S + SMC'))) %>%
 
-table(scenarios$intervention, useNA = 'always')
+  mutate(rank=as.numeric(intervention_f))
+
+table(scenarios$intervention_f, scenarios$rank, useNA = 'always')
 
 # check intervention
-table(scenarios$intervention, useNA='always')
+table(scenarios$intervention_f, useNA='always')
 
 
 # inspect range of scenarios
 table(scenarios$ID)
 summary(scenarios$CE)
 test <- scenarios %>% filter(CE<0)
-table(scenarios$ID, scenarios$intervention) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
+table(scenarios$ID, scenarios$intervention_f) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
 
 saveRDS(scenarios, './03_output/scenarios.rds')
 
