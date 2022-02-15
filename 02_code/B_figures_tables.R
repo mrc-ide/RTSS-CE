@@ -146,11 +146,31 @@ names(supp.labs) <- c(0,.25,.50,.75)
 output %>%
   # filter out mixed strategies
   filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
-  group_by(ID) %>% arrange(ID, deltadaly) %>%
+  group_by(ID) %>% arrange(ID, deltacost) %>%
   # filter out dominated strategies
-  mutate(dominate = case_when(deltacost > lead(deltacost,n=3L) ~ 1,
-                              deltacost > lead(deltacost,n=2L) ~ 1,
-                              deltacost > lead(deltacost,n=1L) ~ 1,
+  mutate(dominate = case_when(deltadaly < lag(deltadaly,n=5L) ~ 1,
+                              deltadaly < lag(deltadaly,n=4L) ~ 1,
+                              deltadaly < lag(deltadaly,n=3L) ~ 1,
+                              deltadaly < lag(deltadaly,n=2L) ~ 1,
+                              deltadaly < lag(deltadaly,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  # marking extended dominated strategies
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
+                             TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  # loop through extendedly dominated strategies again
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
                               TRUE ~ 0)) %>%
   filter(dominate==0) %>%
 ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
@@ -180,11 +200,97 @@ colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppin
 # removing dominated strategies
 output %>%
   # filter out mixed strategies
-  group_by(ID) %>% arrange(ID, deltadaly) %>%
+  group_by(ID) %>% arrange(ID, deltacost) %>%
   # filter out dominated strategies
-  mutate(dominate = case_when(deltacost > lead(deltacost,n=3L) ~ 1,
-                              deltacost > lead(deltacost,n=2L) ~ 1,
-                              deltacost > lead(deltacost,n=1L) ~ 1,
+  mutate(dominate = case_when(deltadaly < lag(deltadaly,n=12L) ~ 1,
+                              deltadaly < lag(deltadaly,n=11L) ~ 1,
+                              deltadaly < lag(deltadaly,n=10L) ~ 1,
+                              deltadaly < lag(deltadaly,n=9L) ~ 1,
+                              deltadaly < lag(deltadaly,n=8L) ~ 1,
+                              deltadaly < lag(deltadaly,n=7L) ~ 1,
+                              deltadaly < lag(deltadaly,n=6L) ~ 1,
+                              deltadaly < lag(deltadaly,n=5L) ~ 1,
+                              deltadaly < lag(deltadaly,n=4L) ~ 1,
+                              deltadaly < lag(deltadaly,n=3L) ~ 1,
+                              deltadaly < lag(deltadaly,n=2L) ~ 1,
+                              deltadaly < lag(deltadaly,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  # marking extended dominated strategies
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
+                              ICER > lead(ICER,n=11L) ~ 1,
+                              ICER > lead(ICER,n=10L) ~ 1,
+                              ICER > lead(ICER,n=9L) ~ 1,
+                              ICER > lead(ICER,n=8L) ~ 1,
+                              ICER > lead(ICER,n=7L) ~ 1,
+                              ICER > lead(ICER,n=6L) ~ 1,
+                              ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  # loop through extendedly dominated strategies again
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
+                              ICER > lead(ICER,n=11L) ~ 1,
+                              ICER > lead(ICER,n=10L) ~ 1,
+                              ICER > lead(ICER,n=9L) ~ 1,
+                              ICER > lead(ICER,n=8L) ~ 1,
+                              ICER > lead(ICER,n=7L) ~ 1,
+                              ICER > lead(ICER,n=6L) ~ 1,
+                              ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
+                              ICER > lead(ICER,n=11L) ~ 1,
+                              ICER > lead(ICER,n=10L) ~ 1,
+                              ICER > lead(ICER,n=9L) ~ 1,
+                              ICER > lead(ICER,n=8L) ~ 1,
+                              ICER > lead(ICER,n=7L) ~ 1,
+                              ICER > lead(ICER,n=6L) ~ 1,
+                              ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
+                              ICER > lead(ICER,n=11L) ~ 1,
+                              ICER > lead(ICER,n=10L) ~ 1,
+                              ICER > lead(ICER,n=9L) ~ 1,
+                              ICER > lead(ICER,n=8L) ~ 1,
+                              ICER > lead(ICER,n=7L) ~ 1,
+                              ICER > lead(ICER,n=6L) ~ 1,
+                              ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
+                              TRUE ~ 0)) %>%
+  filter(dominate==0) %>%
+  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
+                              ICER > lead(ICER,n=11L) ~ 1,
+                              ICER > lead(ICER,n=10L) ~ 1,
+                              ICER > lead(ICER,n=9L) ~ 1,
+                              ICER > lead(ICER,n=8L) ~ 1,
+                              ICER > lead(ICER,n=7L) ~ 1,
+                              ICER > lead(ICER,n=6L) ~ 1,
+                              ICER > lead(ICER,n=5L) ~ 1,
+                              ICER > lead(ICER,n=4L) ~ 1,
+                              ICER > lead(ICER,n=3L) ~ 1,
+                              ICER > lead(ICER,n=2L) ~ 1,
+                              ICER > lead(ICER,n=1L) ~ 1,
                               TRUE ~ 0)) %>%
   filter(dominate==0) %>%
 ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
@@ -543,13 +649,16 @@ ggsave('./03_output/ITN_netz.pdf', width=7, height=4)
 
 
 # ICER table RTS,S doses -------------------------------------------------------
+# cost_per_dose <- c(2.69, 6.52, 12.91)
+# delivery_cost <- c(0.96, 1.62, 2.67)
+# cost_per_dose + delivery_cost
 
-cost_per_dose2 <- c(2, 5, 10) %>% as_tibble %>% rename(cost_per_dose2=value)
+cost_per_dose2 <- c(2.69+1.62, 6.52+1.62, 12.91+1.62) %>% as_tibble %>% rename(cost_per_dose2=value)
 
 # pull out univariate scenarios
 scenarios %>%
   filter(intervention %in% c('RTS,S SV', 'RTS,S EPI')) %>%
-  filter(resistance == 0 & seasonality == 'perennial' & ITNuse == 0.25) %>%
+  filter(resistance == 0 & seasonality == 'perennial') %>%
   merge(cost_per_dose2) %>%
   mutate(cost_vax2 = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose2),
          cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax2) %>%

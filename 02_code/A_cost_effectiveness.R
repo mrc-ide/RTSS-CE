@@ -178,6 +178,7 @@ nets_distributed <-
 saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
 
 # create cost variables
+# 77% of treatment costs are from the public sector (DHS, SSA)
 dalyoutput_cost <- dalyoutput_cost %>%
   left_join(select(nets_distributed, target_use, annual_percapita_nets_distributed),
             by=c('ITNuse2' = 'target_use')) %>%
@@ -186,8 +187,8 @@ dalyoutput_cost <- dalyoutput_cost %>%
          cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 *
            ITNcost,  # true net cost accounting for non-linear relationship
          cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,          # ITN linear
-         cost_clinical = (cases-severe_cases) * treatment * TREATcost,                 # non-severe treatment
-         cost_severe = severe_cases * treatment * SEVcost,                             # severe treatment
+         cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
+         cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
          cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
          cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
 

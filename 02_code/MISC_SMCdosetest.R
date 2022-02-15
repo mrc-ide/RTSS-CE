@@ -30,7 +30,7 @@ runsim <- function(seasonality, seas_name, starting_EIR, fifth){
 # run time
 warmup <- 5*year
 sim_length <- 5*year
-population <- 10000
+population <- 50000
 
 # get starting parameters ----------
 params <- get_parameters(list(

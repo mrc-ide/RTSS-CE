@@ -10,7 +10,7 @@ human_population <- 50000
 seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
 ITN = 'pyr'
 ITNuse = 0.75
-init_EIR = 5
+init_EIR = 50
 
 params <- get_parameters(list(
   human_population = human_population,
