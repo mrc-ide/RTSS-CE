@@ -6,6 +6,7 @@ library(data.table)
 library(patchwork)
 library(grid)
 library(LaCroixColoR)
+library(plotly)
 
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
@@ -408,7 +409,7 @@ ggsave('./03_output/resistanceII.pdf', width=8, height=5)
 
 # density plot -----------------------------------------------------------------
 scenarios_univariate <- scenarios %>% filter(intervention != 'none') %>%
-  select(file, ID, intervention, intervention_f, CE) %>%
+  select(file, ID, intervention, intervention_f, CE, pfpr, seasonality, ITN, ITNuse, ITNboost, resistance, SMC, RTSS) %>%
   arrange(ID, CE)
 
 summary(scenarios_univariate$CE)
@@ -436,7 +437,8 @@ ggplot(scenarios_univariate2) +
   geom_density(aes(x=CE, y=..count..,
                    fill=intervention, color=intervention, group=intervention), alpha=0.3) +
   scale_x_continuous(limits=c(-1000, 1000)) +
-  labs(x=expression(paste(Delta," cost / ", Delta, " DALYs")),
+  labs(
+    #x=expression(paste(Delta," cost / ", Delta, " DALYs")),
        y='density (count)',
        caption=paste0('range in x = ', round(min(scenarios_univariate2$CE)), ' to ', round(max(scenarios_univariate2$CE)))) +
   theme_classic() +
@@ -445,6 +447,21 @@ ggplot(scenarios_univariate2) +
 ggsave('./03_output/interventionCE_density_univariate.pdf', width=8, height=5)
 
 
+test <- scenarios_univariate2 %>% filter(intervention %in% c('RTS,S EPI','RTS,S SV') & CE < 0 )
+
+
+A <- ggplot(scenarios_univariate2) +
+  geom_histogram(aes(x=CE, y=..count..,
+                   fill=intervention, color=intervention, group=intervention), alpha=0.3) +
+  scale_x_continuous(limits=c(-1000, 1000)) +
+  labs(
+    #x=expression(paste(Delta," cost / ", Delta, " DALYs")),
+    y='density (count)',
+    caption=paste0('range in x = ', round(min(scenarios_univariate2$CE)), ' to ', round(max(scenarios_univariate2$CE)))) +
+  theme_classic() +
+  theme(plot.caption.position = "plot")
+ggplotly(A)
+
 
 # box and whisker delta cost / delta daly --------------------------------------
 summary(scenarios$CE)
@@ -452,17 +469,16 @@ summary(scenarios$CE)
 text_high <- textGrob("Highest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 text_low <- textGrob("Lowest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 
-ggplot(scenarios %>% filter(intervention != 'none')) +
+ggplot(scenarios %>% filter(intervention != 'none'), aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 6.5, lty=2, color='grey') +
-  geom_boxplot(aes(x=rank, y=CE,
-                   fill=intervention_f, color=intervention_f, group=intervention), alpha=0.3) +
+  geom_boxplot(alpha=0.3) +
   scale_y_continuous(limits=c(-1000, 1000)) +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " DALYs")),
        fill = 'intervention',
        color = 'intervention',
-       caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE)), ' to ', round(max(scenarios$CE)))) +
+       caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T)))) +
   annotation_custom(textGrob("Univariate strategies"),xmin=2,xmax=6,ymin=-1200,ymax=-1200) +
   annotation_custom(textGrob("Mixed strategies"),xmin=7,xmax=13,ymin=-1200,ymax=-1200) +
   scale_x_continuous(breaks=c(0)) +
@@ -470,154 +486,189 @@ ggplot(scenarios %>% filter(intervention != 'none')) +
   theme_classic() +
   theme(plot.caption.position = "plot")
 
+
 ggsave('./03_output/box_whisker_CE.pdf', width=10, height=5)
 
 
 
 
 # per dose RTS,S cost ----------------------------------------------------------
-# set up cost vector
-cost_per_dose2 <- seq(-50,100,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
+# find most common character value in group
+calculate_mode <- function(x) {
+  uniqx <- unique(na.omit(x))
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
 
-# pull out univariate scenarios
-output <- scenarios %>% filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
-  select(file:dose4, daly, ITNcost:intervention) %>% merge(cost_per_dose2) %>%
-  mutate(cost_vax2 = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose2),
-         cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax2)
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  # choose univariate scenarios
+  filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
+  # combine RTS,S strategies
+  mutate(intervention = ifelse(intervention=='RTS,S EPI' | intervention=='RTS,S SV', 'RTS,S', intervention)) %>%
+  arrange(ID) %>%
+  # find minimum CE in each group. If intervention == RTS,S find the second or third lowest CE
+  group_by(ID) %>%
+  mutate(CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
+         CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
+         CEmin = min(CE, na.rm=T),
+         interventionmin = ifelse(CE==CEmin, intervention, NA),
+         interventionmin = calculate_mode(interventionmin)) %>%
+  filter(intervention %in% c('RTS,S')) %>%
+  rowwise() %>%
+  # calculate needed cost of RTS,S to match the min CE intervention
+  # CEmin = (cost_total - cost_total_baseline) / (daly_baseline - daly)
+  mutate(delta_cost = CEmin * (daly_baseline - daly),
+         cost_total = delta_cost + cost_total_baseline,
+         cost_vax = cost_total - (cost_ITN + cost_clinical + cost_severe + cost_SMC),
+         per_dose = cost_vax / (dose1 + dose2 + dose3 + dose4),
+         costRTSS = per_dose - 1.62   # subtracting delivery cost
+  ) %>%
+  select(ID, resistance, SMC, intervention, interventionmin, CE, CEmin, costRTSS) %>%
+  group_by(ID) %>%
+  arrange(ID,costRTSS)
 
-# checks
-test <- output %>% filter(RTSS=='SV' & pfpr==0.2 & seasonality=='seasonal') %>%
-  select(cost_per_dose, delivery_cost, cost_vax, cost_per_dose2, cost_vax2) %>%
-  mutate(checkdosecost=(cost_per_dose+delivery_cost)/cost_per_dose2,
-         checkvaxcost=cost_vax/cost_vax2)
+# inspect range
+summary(output$costRTSS)
+test <- output %>% filter(costRTSS < -10)
 
-head(table(test$checkdosecost, test$checkvaxcost)) # fractions should be the same
-
-output %>% group_by(ID) %>% summarize(n=n())
-
-# rank order CE
-test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_dose2, intervention, daly, daly_baseline, cost_total2, cost_total_baseline) %>%
-  mutate(CE = (cost_total2 - cost_total_baseline) / (daly_baseline - daly)) %>%
-  ungroup() %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
-  arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
-  slice_head(n = 1) %>%
-  ungroup() %>%
-  mutate(rank = ifelse(intervention %in% c('RTS,S EPI', 'RTS,S SV'), cost_per_dose2, NA)) %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
-  summarize(rank2 = max(rank, na.rm=T))
-
-table(test$rank2)
-
-ggplot(data=test) +
-  geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
+# plot
+# scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
+ggplot(output) +
+  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
+  geom_density(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
   theme_classic() +
+  facet_grid(~interventionmin) +
   labs(x='RTS,S cost (USD) per dose',
        y='count',
        fill='resistance',
-       caption='13 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)\n1 scenario where RTS,S is most CE == -$40') +
+       caption=paste0('range = ', round(min(output$costRTSS)), ' to ', round(max(output$costRTSS)))) +
   scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10)) +
-  theme(plot.caption.position = "plot")
+  theme(plot.caption.position = "plot") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave('./03_output/RTSS_price_dist.pdf', width=7, height=4)
+ggsave('./03_output/RTSS_price_dist.pdf', width=12, height=4)
 
 
-# per dose ITN cost -------------------------------------------------------------------
+# per dose ITN cost ------------------------------------------------------------
 # set up cost vector
-population <- 10000
+population <- 100000
 sim_length <- 15*365
+# find most common character value in group
+calculate_mode <- function(x) {
+  uniqx <- unique(na.omit(x))
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
 
-cost_per_dose2 <- seq(-5,200,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  # choose univariate scenarios
+  filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
+  # combine RTS,S strategies
+  mutate(intervention = case_when(intervention=='RTS,S EPI' | intervention=='RTS,S SV' ~ 'RTS,S',
+                                  intervention=='ITN 10% boost' | intervention=='ITN PBO' ~ 'ITN',
+                                  TRUE ~ intervention)) %>%
+  arrange(ID) %>%
+  # find minimum CE in each group. If intervention == ITN find the second or third lowest CE
+  group_by(ID) %>%
+  mutate(CE = ifelse(CE == min(CE) & intervention == 'ITN', 100000, CE),
+         CE = ifelse(CE == min(CE) & intervention == 'ITN', 100000, CE),
+         CEmin = min(CE, na.rm=T),
+         interventionmin = ifelse(CE==CEmin, intervention, NA),
+         interventionmin = calculate_mode(interventionmin)) %>%
+  filter(intervention %in% c('ITN')) %>%
+  rowwise() %>%
+  # calculate needed cost of RTS,S to match the min CE intervention
+  # CEmin = (cost_total - cost_total_baseline) / (daly_baseline - daly)
+  mutate(delta_cost = CEmin * (daly_baseline - daly),
+         cost_total = delta_cost + cost_total_baseline,
+         cost_ITN = cost_total - (cost_clinical + cost_severe + cost_SMC + cost_vax),
+         costITN = cost_ITN / (population * annual_percapita_nets_distributed * sim_length/365)
+  ) %>%
+  select(ID, resistance, SMC, intervention, interventionmin, CE, CEmin, costITN) %>%
+  group_by(ID) %>%
+  arrange(ID,costITN)
 
-# pull out univariate scenarios
-output <- scenarios %>% filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
-  merge(cost_per_dose2) %>%
-  mutate(cost_ITN2 = population * annual_percapita_nets_distributed * sim_length/365 * cost_per_dose2,
-         cost_total2 = cost_ITN2 + cost_clinical + cost_severe + cost_SMC + cost_vax)
+# inspect range
+summary(output$costITN)
+test <- output %>% filter(costITN < -10)
 
-# checks
-output %>% group_by(ID) %>% summarize(n=n())
-
-# rank order CE
-test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_dose2, intervention, daly, daly_baseline, cost_total2, cost_total_baseline) %>%
-  mutate(CE = (cost_total2 - cost_total_baseline) / (daly_baseline - daly)) %>%
-  ungroup() %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
-  arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
-  slice_head(n = 1) %>%
-  ungroup() %>%
-  mutate(rank = ifelse(intervention %in% c('ITN 10% boost', 'ITN PBO'), cost_per_dose2, NA)) %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
-  summarize(rank2 = max(rank, na.rm=T))
-
-table(test$rank2)
-test %>% filter(rank2 == -Inf)
-
-ggplot(data=test) +
-  geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
+# plot
+# scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
+ggplot(output) +
+  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
+  geom_density(aes(x=costITN, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
   theme_classic() +
-  labs(x='ITN cost (USD) per dose',
+  facet_grid(~interventionmin) +
+  labs(x='ITN cost (USD) per net',
        y='count',
        fill='resistance',
-       caption='40 scenarios where ITNs are most CE >=$100 \n13 scenarios where ITNs are never the most CE (all resistance==0.8)') +
-  scale_x_continuous(breaks=seq(-10,200,10), limits=c(-5,200)) +
-  scale_y_continuous(limits=c(0,5)) +
-  theme(plot.caption.position = "plot")
+       caption=paste0('range = ', round(min(output$costITN)), ' to ', round(max(output$costITN)))) +
+  scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10)) +
+  theme(plot.caption.position = "plot") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-
-ggsave('./03_output/ITN_price_dist.pdf', width=7, height=4)
+ggsave('./03_output/ITN_price_dist.pdf', width=12, height=4)
 
 
 
 # per dose SMC cost -------------------------------------------------------------------
 # set up cost vector
-cost_per_dose2 <- seq(-50,100,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
+population <- 100000
+sim_length <- 15*365
 
-# pull out univariate scenarios
-output <- scenarios %>% filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC')) %>%
-  filter(seasonality=='seasonal') %>%
-  merge(cost_per_dose2) %>%
-  mutate(cost_SMC2 = n_182.5_1825 * SMC * cost_per_dose2 * smc_timesteps,
-         cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC2 + cost_vax)
+# find most common character value in group
+calculate_mode <- function(x) {
+  uniqx <- unique(na.omit(x))
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
 
-summary(output$cost_SMC); summary(output$cost_SMC2)
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  # choose univariate scenarios
+  filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
+  # combine RTS,S strategies
+  mutate(intervention = case_when(intervention=='RTS,S EPI' | intervention=='RTS,S SV' ~ 'RTS,S',
+                                  TRUE ~ intervention)) %>%
+  arrange(ID) %>%
+  # find minimum CE in each group. If intervention == SMC find the second lowest CE
+  group_by(ID) %>%
+  mutate(CE = ifelse(CE == min(CE) & intervention == 'SMC', 100000, CE),
+         CEmin = min(CE, na.rm=T),
+         interventionmin = ifelse(CE==CEmin, intervention, NA),
+         interventionmin = calculate_mode(interventionmin)) %>%
+  filter(intervention %in% c('SMC')) %>%
+  rowwise() %>%
+  # calculate needed cost of RTS,S to match the min CE intervention
+  # CEmin = (cost_total - cost_total_baseline) / (daly_baseline - daly)
+  mutate(delta_cost = CEmin * (daly_baseline - daly),
+         cost_total = delta_cost + cost_total_baseline,
+         cost_SMC = cost_total - (cost_clinical + cost_severe + cost_ITN + cost_vax),
+         costSMC = cost_SMC / (n_182.5_1825 * SMC * smc_timesteps)
+  ) %>%
+  select(ID, resistance, SMC, intervention, interventionmin, CE, CEmin, costSMC) %>%
+  group_by(ID) %>%
+  arrange(ID,costSMC)
 
+# inspect range
+summary(output$costSMC)
+test <- output %>% filter(costSMC < -10)
 
-# checks
-test <- output %>% filter(SMC==0.85 & pfpr==0.2 & seasonality=='seasonal') %>%
-  select(cost_per_dose, cost_SMC, cost_per_dose2, cost_SMC2) %>%
-  mutate(checkdosecost=1.44/cost_per_dose2,
-         checkvaxcost=cost_SMC/cost_SMC2)
-
-head(table(test$checkdosecost, test$checkvaxcost)) # fractions should be the same
-
-output %>% group_by(ID) %>% summarize(n=n())
-
-# rank order CE
-test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_dose2, intervention, daly, daly_baseline, cost_total2, cost_total_baseline) %>%
-  mutate(CE = (cost_total2 - cost_total_baseline) / (daly_baseline - daly)) %>%
-  ungroup() %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
-  arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
-  slice_head(n = 1) %>%
-  ungroup() %>%
-  mutate(rank = ifelse(intervention == 'SMC', cost_per_dose2, NA)) %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
-  summarize(rank2 = max(rank, na.rm=T))
-
-table(test$rank2)
-
-ggplot(data=test) +
-  geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
+# plot
+# scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
+ggplot(output) +
+  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
+  geom_density(aes(x=costSMC, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
   theme_classic() +
-  labs(x='SMC cost per dose (USD)',
+  facet_grid(~interventionmin) +
+  labs(x='SMC cost (USD) per dose',
        y='count',
        fill='resistance',
-       caption='1 scenario where SMC is most CE == -$19 \ncomparisons solely between RTS,S and SMC strategies in seasonal settings') +
+       caption=paste0('range = ', round(min(output$costSMC)), ' to ', round(max(output$costSMC)))) +
   scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10)) +
-  theme(plot.caption.position = "plot")
+  theme(plot.caption.position = "plot") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave('./03_output/SMC_price_dist.pdf', width=7, height=4)
+ggsave('./03_output/SMC_price_dist.pdf', width=12, height=4)
 
 
 
@@ -629,7 +680,7 @@ A <- ggplot(dalyoutput_cost %>% filter(ITN=='pyr')) +
   geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
   geom_abline(slope=1) +
   scale_x_continuous(limits=c(0, 265000)) +
-  scale_y_continuous(limits=c(0, 408000)) +
+  scale_y_continuous(limits=c(0, 588000)) +
   scale_color_gradient(limits=c(0,0.85)) +
   labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid') +
   theme_classic()
@@ -638,7 +689,7 @@ B <- ggplot(dalyoutput_cost %>% filter(ITN=='pbo')) +
   geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
   geom_abline(slope=1) +
   scale_x_continuous(limits=c(0, 265000)) +
-  scale_y_continuous(limits=c(0, 408000)) +
+  scale_y_continuous(limits=c(0, 588000)) +
   scale_color_gradient(limits=c(0,0.85)) +
   labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid + PBO') +
   theme_classic()
@@ -646,6 +697,86 @@ B <- ggplot(dalyoutput_cost %>% filter(ITN=='pbo')) +
 A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
 ggsave('./03_output/ITN_netz.pdf', width=7, height=4)
+
+
+
+# univariate stacked histogram patterns ----------------------------------------
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+  group_by(ID) %>% arrange(ID, CE) %>%
+  slice(1L)
+
+ggplot(output) +
+  geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill") +
+  labs(x='PfPR', y='Proportion', fill='intervention') +
+  theme_classic()
+
+
+ggplot(output) +
+  geom_bar(aes(x=as.factor(seasonality), fill=intervention_f), position="fill") +
+  labs(x='Seasonality', y='Proportion', fill='intervention') +
+  facet_wrap(~resistance) +
+  theme_classic()
+
+ggplot(output) +
+  geom_bar(aes(x=as.factor(seasonality), fill=intervention_f), position="fill") +
+  labs(x='Seasonality', y='Proportion', fill='intervention') +
+  facet_wrap(~resistance) +
+  theme_classic()
+
+
+# by ITN distribution efficiency
+ITNefficient <- function(var, label) {
+  scenarios %>%
+    filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+    filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+    group_by(ID) %>% arrange(ID, {{var}}) %>%
+    slice(1L) %>% select(intervention_f, {{var}}) %>%
+    mutate(model=label) %>%
+    rename(CE = {{var}})
+
+}
+
+output2 <- ITNefficient(CE, 'standard') %>%
+  full_join(ITNefficient(CE_ITNmin, 'less efficient')) %>%
+  full_join(ITNefficient(CE_ITNmax, 'more efficient'))
+
+ggplot(output2) +
+  geom_bar(aes(x=as.factor(model), fill=intervention_f), position="fill") +
+  labs(x='PfPR', y='Proportion', fill='intervention') +
+  theme_classic()
+
+
+
+
+ggsave('./03_output/univariate_pfpr.pdf', width=7, height=4)
+
+
+
+
+
+
+
+# netz usage and countries -----------------------------------------------------
+# https://malariaatlas.org/research-project/the-impact-of-malaria-control-on-plasmodium-falciparum-in-africa-2000-2015/
+nets_data <- read_csv('./01_data/Intervention_ITN.csv') %>% arrange(`2015`) %>%
+  mutate(Name_f = factor(Name, levels=Name))
+
+ggplot(nets_data) +
+  geom_rect(xmin=1, xmax=43, ymin=-.01, ymax=.01, fill='#BF80FF', alpha=0.01) +
+  geom_rect(xmin=1, xmax=43, ymin=.24, ymax=.26, fill='#F37B59', alpha=0.01) +
+  geom_rect(xmin=1, xmax=43, ymin=.49, ymax=.51, fill='#39B600', alpha=0.01) +
+  geom_rect(xmin=1, xmax=43, ymin=.74, ymax=.76, fill='#00BDD0', alpha=0.01) +
+  geom_point(aes(x=Name_f, y = `2015`)) +
+  labs(x='Country', y='ITN use by country, 2015') +
+  scale_x_discrete(labels = scales::wrap_format(15)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+ggsave('./03_output/ITN_usage.pdf', width=12, height=4)
+
 
 
 # ICER table RTS,S doses -------------------------------------------------------
