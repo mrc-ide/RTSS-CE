@@ -1,6 +1,6 @@
 # Specify HPC options ----------------------------------------------------------
-
 library(didehpc)
+setwd('Q:/GF-RTSS-CE')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
@@ -8,11 +8,12 @@ options(didehpc.cluster = "fi--didemrchnb",
 source('./02_code/HPC/functions.R')
 
 # transfer the new malariasimulation folder manually to contexts or delete and reinstall using conan
+# remotes::install_github('mrc-ide/malariasimulation@dev', force=T)
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
 ctx <- context::context_save(path = "Q:/contexts",
                              sources = c('./02_code/HPC/functions.R'),
-                             packages = c("tidyverse", "malariasimulation"),
+                             packages = c("dplyr", "malariasimulation"),
                              package_sources = src)
 
 share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/homes/htopazia', "M:")
@@ -22,7 +23,7 @@ config <- didehpc::didehpc_config(shares = share,
                                   cluster = "fi--didemrchnb",
                                   parallel = FALSE)
 
-obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade") # check for latest v. of packages
+obj <- didehpc::queue_didehpc(ctx, config = config) # check for latest v. of packages
 
 
 # Set up your job --------------------------------------------------------------

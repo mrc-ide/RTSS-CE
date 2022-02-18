@@ -107,7 +107,7 @@ params <- set_bednets(
 # SMC ----------
 if (fifth==0) {
   peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5)*month),0)
+  first <- round(warmup+c(peak+c(-2,-1,0,1)*month),0)
   firststeps <- sort(rep(first, sim_length/year))
   yearsteps <- rep(c(0, seq(year, sim_length - year, year)), length(first))
   timesteps <- yearsteps + firststeps
@@ -117,13 +117,13 @@ if (fifth==0) {
     drug = 2,
     timesteps = sort(timesteps),
     coverages = rep(0.85, length(timesteps)),
-    min_age = round(0.5*year),
+    min_age = round(0.25*year),
     max_age = round(5*year))
 }
 
 if (fifth==1) {
   peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-0.5,0.5,1.5,2.5)*month),0)
+  first <- round(warmup+c(peak+c(-1,0,1,2)*month),0)
   firststeps <- sort(rep(first, sim_length/year))
   yearsteps <- rep(c(0, seq(year, sim_length - year, year)), length(first))
   timesteps <- yearsteps + firststeps
@@ -133,13 +133,13 @@ if (fifth==1) {
     drug = 2,
     timesteps = sort(timesteps),
     coverages = rep(0.85, length(timesteps)),
-    min_age = round(0.5*year),
+    min_age = round(0.25*year),
     max_age = round(5*year))
 }
 
 if (fifth==2) {
   peak <- peak_season_offset(params)
-  first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5,2.5)*month),0)
+  first <- round(warmup+c(peak+c(-2,-1,0,1,2)*month),0)
   firststeps <- sort(rep(first, sim_length/year))
   yearsteps <- rep(c(0, seq(year, sim_length - year, year)), length(first))
   timesteps <- yearsteps + firststeps
@@ -149,7 +149,7 @@ if (fifth==2) {
     drug = 2,
     timesteps = sort(timesteps),
     coverages = rep(0.85, length(timesteps)),
-    min_age = round(0.5*year),
+    min_age = round(0.25*year),
     max_age = round(5*year))
 }
 

@@ -2,6 +2,7 @@
 require(data.table)
 library(tidyverse)
 
+data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/'
 
 # raw data ---------------------------------------------------------------------
 # pull all .rds files from HPC output folder and combine
@@ -68,7 +69,7 @@ dat3 <- dat2 %>%
   distinct() %>% ungroup()
 
 # save
-saveRDS(dat3,"C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/rtss_long.rds")
+saveRDS(dat3, paste0(data.dir, "03_output/rtss_long.rds"))
 
 
 # averted cases / severe-cases / deaths ----------------------------------------
@@ -79,7 +80,7 @@ baseline <- dat3 %>%
   rename(n_baseline = n, inc_clinical_baseline = inc_clinical, inc_severe_baseline = inc_severe)
 
 # save
-saveRDS(baseline,"./03_output/rtss_baseline.rds")
+saveRDS(baseline, paste0(data.dir, "03_output/rtss_baseline.rds"))
 
 averted <- dat3 %>%
   filter(!(file %in% baseline$file)) %>% # removing scenarios with no intervention
@@ -88,5 +89,5 @@ averted <- dat3 %>%
          severe_avert = ((inc_severe/n) - (inc_severe_baseline/n_baseline)) * 10000)   # severe cases averted per 100,000 people
 
 # save
-saveRDS(averted,"./03_output/rtss_avert.rds")
+saveRDS(averted, paste0(data.dir, "03_output/rtss_avert.rds"))
 
