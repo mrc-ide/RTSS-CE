@@ -24,7 +24,7 @@ scenarios <- readRDS('./03_output/scenarios.rds')
 # seasonality II ---------------------------------------------------------------
 
 output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 )%>%
-  filter(seasonality == 'highly seasonal' & pfpr == 0.4)
+  filter(seasonality == 'highly seasonal')
 
 # look at one file
 interventiontime <- output  %>%
@@ -90,6 +90,8 @@ none <- dat %>%
 
 ggplot(data = none %>% filter(seasonality != 'perennial')) +
   geom_line(aes(x=month, y=n_inc_clinical_182.5_1825/n_182.5_1825, color=as.factor(pfpr)), alpha = 0.8) +
+  geom_rect(data = SMCtime[SMCtime$seasonality=='highly seasonal',], aes(xmin=min(smc, na.rm=T), xmax=max(smc, na.rm=T)+1, ymin=0, ymax=0.5), lty=2, fill='red', alpha=0.015) +
+  geom_rect(data = SMCtime[SMCtime$seasonality=='seasonal',], aes(xmin=min(smc, na.rm=T), xmax=max(smc, na.rm=T)+1, ymin=0, ymax=0.5), lty=2, fill='red', alpha=0.015) +
   geom_vline(data = SMCtime, aes(xintercept=smc, alpha='SMC'), lty=2, color='red') +
   geom_vline(data = RTSStime, aes(xintercept=rtss, alpha='RTS,S SV dose 3'), lty=2, color='blue') +
   geom_vline(data = ITNtime, aes(xintercept=itn, alpha='ITN'), lty=2, color='green') +
@@ -103,6 +105,16 @@ ggplot(data = none %>% filter(seasonality != 'perennial')) +
   theme_classic()
 
 ggsave('./03_output/seasonalityIII.pdf', width=10, height=5)
+
+
+
+# check that clinical incidence among children meets the criteria of >= 0.1
+CIcheck <- dat %>%
+  filter(ITNboost==0 & ITNuse==0.5 & RTSS=='none' & ITN=='pyr' & resistance==0 & seasonality!='perennial' & (SMC==0 | (seasonality=='highly seasonal')) & year==1)
+
+CIcheck %>% group_by(pfpr, seasonality) %>%
+  summarize(cinc = sum((n_inc_clinical_0_182.5 + n_inc_clinical_182.5_1825) / (n_182.5_1825 + n_182.5_1825)))
+
 
 
 # delta change -----------------------------------------------------------------

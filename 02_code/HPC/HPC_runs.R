@@ -7,6 +7,9 @@ options(didehpc.cluster = "fi--didemrchnb",
 
 source('./02_code/HPC/functions.R') # reference functions
 
+# transfer the new malariasimulation folder manually to contexts or delete and reinstall using conan
+# remotes::install_github('mrc-ide/malariasimulation@dev', force=T)
+
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
 ctx <- context::context_save(path = "Q:/contexts",
@@ -22,6 +25,7 @@ config <- didehpc::didehpc_config(shares = share,
                                   parallel = FALSE)
 
 obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
+obj <- didehpc::queue_didehpc(ctx, config = config)
 
 
 # Set up your job --------------------------------------------------------------
@@ -87,6 +91,7 @@ combo <- crossing(population, stable, warmup, sim_length, speciesprop, intervent
   filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
   filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always SMC in highly seasonal settings
   filter(!(ITNuse == 0 & resistance != 0)) %>% # can't have resistance levels when ITNuse == 0
+  filter(!(ITN == 'pbo' & resistance == 0)) %>% # only introduce PBO in areas that have resistance
   filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # no boost AND PBO combinations
   filter(!(ITN == 'pbo' & ITNuse == 0)) # can't switch to pbo with 0 net use
 
@@ -124,7 +129,7 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   select(-f, -exist)
 
 # to run for test
-t <- obj$enqueue_bulk(combo, runsimGF)
+t <- obj$enqueue_bulk(combo, runsimGF) # run 500 at a time [1:522,]
 t$status()
 
 beepr::beep(1)

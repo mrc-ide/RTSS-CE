@@ -37,10 +37,10 @@ runsimGF <- function(population,        # simulation population
 
   # outcome definitions ----------
     # incidence for every 5 year age group
-  params$clinical_incidence_rendering_min_ages = c(0, 0.5, seq(5,100,5))*year
-  params$clinical_incidence_rendering_max_ages = c(0.5, seq(5,100,5),200)*year
-  params$severe_incidence_rendering_min_ages = c(0, 0.5, seq(5,100,5))*year
-  params$severe_incidence_rendering_max_ages = c(0.5, seq(5,100,5),200)*year
+  params$clinical_incidence_rendering_min_ages = c(0, 0.25, seq(5,100,5))*year
+  params$clinical_incidence_rendering_max_ages = c(0.25, seq(5,100,5),200)*year
+  params$severe_incidence_rendering_min_ages = c(0, 0.25, seq(5,100,5))*year
+  params$severe_incidence_rendering_max_ages = c(0.25, seq(5,100,5),200)*year
   params$prevalence_rendering_min_ages = 2 * year
   params$prevalence_rendering_max_ages = 10 * year
 
@@ -194,7 +194,7 @@ runsimGF <- function(population,        # simulation population
 
   if (SMC > 0 & seas_name == 'seasonal') {
     peak <- peak_season_offset(params)
-    first <- round(warmup+c(peak+c(-1.5,-0.5,0.5,1.5,2.5)*month),0)
+    first <- round(warmup+c(peak+c(-2,-1,0,1,2)*month),0)
     firststeps <- sort(rep(first, sim_length/year))
     yearsteps <- rep(c(0, seq(year, sim_length - year, year)), length(first))
     timesteps <- yearsteps + firststeps
@@ -208,7 +208,7 @@ runsimGF <- function(population,        # simulation population
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.5*year),
+      min_age = round(0.25*year),
       max_age = round(5*year))
 
     smc_timesteps <- params$smc_timesteps - warmup
@@ -216,7 +216,7 @@ runsimGF <- function(population,        # simulation population
 
   if (SMC > 0 & seas_name == 'highly seasonal') {
     peak <- peak_season_offset(params)
-    first <- round(c(peak+c(-0.5,0.5,1.5,2.5)*month),0)
+    first <- round(c(peak+c(-1,0,1,2)*month),0)
     firststeps <- sort(rep(first, (warmup+sim_length)/year))
     yearsteps <- rep(c(0, seq(year, (warmup+sim_length) - year, year)), length(first))
     timesteps <- yearsteps + firststeps
@@ -230,7 +230,7 @@ runsimGF <- function(population,        # simulation population
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.5*year),
+      min_age = round(0.25*year),
       max_age = round(5*year))
 
     smc_timesteps <- params$smc_timesteps - warmup
@@ -349,13 +349,13 @@ runsimGF <- function(population,        # simulation population
              ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
              bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
 
-    mutate_at(vars(n_0_182.5:n_36500_73000, n_730_3650,
+    mutate_at(vars(n_0_91.25:n_36500_73000, n_730_3650,
                    n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) %>%
-    mutate_at(vars(n_inc_severe_0_182.5:p_inc_clinical_36500_73000,
+    mutate_at(vars(n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
                    n_treated, n_infections), sum, na.rm = TRUE) %>%
 
-    dplyr::select(n_0_182.5:n_36500_73000,
-                  n_inc_severe_0_182.5:p_inc_clinical_36500_73000,
+    dplyr::select(n_0_91.25:n_36500_73000,
+                  n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
                   n_detect_730_3650, p_detect_730_3650,
                   n_730_3650,
                   n_treated, n_infections) %>%
@@ -407,7 +407,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
 
   if (seas_name == 'highly seasonal') {
   peak <- peak_season_offset(params)
-  first <- round(c(peak+c(-0.5,0.5,1.5,2.5)*month),0)
+  first <- round(c(peak+c(-1,0,1,2)*month),0)
   firststeps <- sort(rep(first, (9*year)/year))
   yearsteps <- rep(c(0, seq(year, (9*year) - year, year)), length(first))
   timesteps <- yearsteps + firststeps
@@ -417,7 +417,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
     drug = 2,
     timesteps = sort(timesteps),
     coverages = rep(.85, length(timesteps)),
-    min_age = round(0.5*year),
+    min_age = round(0.25*year),
     max_age = round(5*year))
   }
 
