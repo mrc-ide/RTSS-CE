@@ -182,6 +182,9 @@ runsimGF <- function(population,        # simulation population
     parameters = params,
     list(AL_params, SP_AQ_params))
 
+  params$drug_prophylaxis_scale <- c(10.6, 39.34)
+  params$drug_prophylaxis_shape <- c(11.3, 3.40)
+
   params <- set_clinical_treatment(
     parameters = params,
     drug = 1,
@@ -202,6 +205,9 @@ runsimGF <- function(population,        # simulation population
     params <- set_drugs(
       parameters = params,
       list(AL_params, SP_AQ_params))
+
+    params$drug_prophylaxis_scale <- c(10.6, 39.34)
+    params$drug_prophylaxis_shape <- c(11.3, 3.40)
 
     params <- set_smc(
       parameters = params,
@@ -225,6 +231,9 @@ runsimGF <- function(population,        # simulation population
       parameters = params,
       list(AL_params, SP_AQ_params))
 
+    params$drug_prophylaxis_scale <- c(10.6, 39.34)
+    params$drug_prophylaxis_shape <- c(11.3, 3.40)
+
     params <- set_smc(
       parameters = params,
       drug = 2,
@@ -235,6 +244,8 @@ runsimGF <- function(population,        # simulation population
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
+
+
 
   # EPI ----------
   if (RTSS == "EPI") {
@@ -296,6 +307,19 @@ runsimGF <- function(population,        # simulation population
     boosters = boosters,
     booster_coverage = rep(.80, length(boosters)),
     seasonal_boosters = TRUE)
+  }
+
+    # synergy ----------
+  if (SMC > 0 & RTSS %in% c("EPI", "SV", "hybrid")) {
+
+  params$rtss_beta <- 70.9
+  params$rtss_alpha <- 0.868
+  params$rtss_vmax <- 0.843
+  params$rtss_cs_boost <- c(6.37008, 0.35)
+
+  params$drug_prophylaxis_scale <- c(10.6, 45.76)
+  params$drug_prophylaxis_shape <- c(11.3, 2.87)
+
   }
 
   # EIR equilibrium ----------
@@ -419,6 +443,10 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
     coverages = rep(.85, length(timesteps)),
     min_age = round(0.25*year),
     max_age = round(5*year))
+
+  params$drug_prophylaxis_scale <- c(10.6, 39.34)
+  params$drug_prophylaxis_shape <- c(11.3, 3.40)
+
   }
 
   # no resistance

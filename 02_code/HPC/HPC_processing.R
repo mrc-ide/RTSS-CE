@@ -26,7 +26,7 @@ dat <- dat %>% rowwise() %>%
                            RTSS=="SV" ~ n_rtss_mass_booster_1)) %>% ungroup()
 
 # save
-saveRDS(dat,"C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/03_output/rtss_raw.rds")
+saveRDS(dat, paste0(data.dir, "03_output/rtss_raw.rds"))
 
 # check prevalence - that the EIR used in the simulation results in the matching prevalence value
 test <- dat %>%
@@ -42,19 +42,19 @@ test <- dat %>%
 dat2 <- dat %>%
   filter(year <= 15) %>% # first 15 years
   group_by(file) %>%
-  mutate_at(vars(n_0_182.5:n_36500_73000), mean, na.rm = TRUE) %>%   # mean of n in each age group
-  mutate_at(vars(n_inc_severe_0_182.5:dose4), sum, na.rm = TRUE) %>% # sum of cases and vax doses
+  mutate_at(vars(n_0_91.25:n_36500_73000), mean, na.rm = TRUE) %>%   # mean of n in each age group
+  mutate_at(vars(n_inc_severe_0_91.25:dose4), sum, na.rm = TRUE) %>% # sum of cases and vax doses
   select(-month, -year) %>%
   distinct()
 
 # calculate outputs by age
 dat3 <- dat2 %>%
-  dplyr::select(file:n_36500_73000, n_inc_clinical_0_182.5:n_inc_clinical_36500_73000,
-                n_inc_severe_0_182.5:n_inc_severe_36500_73000, n_treated, n_infections, dose1:dose4) %>%
+  dplyr::select(file:n_36500_73000, n_inc_clinical_0_91.25:n_inc_clinical_36500_73000,
+                n_inc_severe_0_91.25:n_inc_severe_36500_73000, n_treated, n_infections, dose1:dose4) %>%
   # moving to long age groups
-  pivot_longer(cols = c(n_0_182.5:n_36500_73000,
-                        n_inc_clinical_0_182.5:n_inc_clinical_36500_73000,
-                        n_inc_severe_0_182.5:n_inc_severe_36500_73000),
+  pivot_longer(cols = c(n_0_91.25:n_36500_73000,
+                        n_inc_clinical_0_91.25:n_inc_clinical_36500_73000,
+                        n_inc_severe_0_91.25:n_inc_severe_36500_73000),
                names_to = c('age'), values_to = c('value')) %>%
   mutate(n = ifelse(grepl('n_[[:digit:]]', age), value, NA),             # creating var for age group
          inc_clinical = ifelse(grepl('n_inc_clinical', age), value, NA), # creating var for inc_clinical

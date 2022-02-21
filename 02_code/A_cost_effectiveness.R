@@ -99,13 +99,13 @@ summary(dalyoutput$yld)
 dalyoutput <- dalyoutput %>%
   select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
   group_by(file) %>%                      # group to condense to one record per run
-  mutate(n_182.5_1825 = ifelse(age=='182.5-1825', n, 0)) %>% # create variable for n ages 0.5-5 years to use in costing
-  mutate_at(vars(n, n_182.5_1825, inc_clinical:daly), sum, na.rm=T) %>%      # condense outputs over all ages in population
+  mutate(n_91.25_1825 = ifelse(age=='91.25-1825', n, 0)) %>% # create variable for n ages 0.25-5 years to use in costing
+  mutate_at(vars(n, n_91.25_1825, inc_clinical:daly), sum, na.rm=T) %>%      # condense outputs over all ages in population
   select(-age, -age_upper, -age_lower) %>%
   distinct()
 
-# check that n_182.5_1825 var is created correctly
-summary(dalyoutput$n_182.5_1825)
+# check that n_91.25_1825 var is created correctly
+summary(dalyoutput$n_91.25_1825)
 
 saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
@@ -213,7 +213,7 @@ dalyoutput_cost <- dalyoutput_cost %>%
          cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,          # ITN linear
          cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
          cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
-         cost_SMC = n_182.5_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
+         cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
          cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
 
          cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax, # TOTAL
@@ -230,7 +230,7 @@ output <- dalyoutput_cost %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, sep="_")) # create unique identifier
 
-# there should be 36 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 3 resistance
+# there should be 90 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 2.5 resistance (only pbo in resistance scenarios)
 none <- output %>%
   filter(ITNboost==0 & ITN=='pyr' & RTSS=='none' & # filter out interventions
            (SMC==0 | (seasonality=='highly seasonal'))) %>%
@@ -279,8 +279,7 @@ table(scenarios$intervention_f, scenarios$rank, useNA = 'always')
 # inspect range of scenarios
 table(scenarios$ID)
 summary(scenarios$CE)
-test <- scenarios %>% filter(CE<0)
-table(scenarios$ID, scenarios$intervention_f) # three of scenarios with resistance, and one with 0 resistance (ITNuse=0)
+test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE) # all negative CE scenarios have resistance except 2
 
 saveRDS(scenarios, './03_output/scenarios.rds')
 
