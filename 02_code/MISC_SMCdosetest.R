@@ -7,16 +7,18 @@ library(malariasimulation)
 year <- 365
 month <- year/12
 
+match <- readRDS("./02_code/HPC/EIRestimates.rds") %>% filter(ITNuse==0.5 & seas_name!='perennial'); match
+
 # FIRST
 seas_name <- 'highly seasonal'
 seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
-starting_EIR <- c(2.31, 14.3, 100)
+starting_EIR <- c(10.2, 30.3, 167)
 s1 <- crossing(seasonality, seas_name, starting_EIR)
 
 # SECOND
 seas_name <- 'seasonal'
 seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
-starting_EIR <- c(1.81, 11.1, 90.5)
+starting_EIR <- c(4.42, 11.4, 43.6)
 s2 <- crossing(seasonality, seas_name, starting_EIR)
 
 fifth <- c(0,1,2)
@@ -76,6 +78,9 @@ params <- set_demography(
 params <- set_drugs(
   parameters = params,
   list(AL_params, SP_AQ_params))
+
+params$drug_prophylaxis_scale <- c(10.6, 39.34)
+params$drug_prophylaxis_shape <- c(11.3, 3.40)
 
 params <- set_clinical_treatment(
   parameters = params,
@@ -203,9 +208,9 @@ output2 <- output %>%
   mutate(scenario = case_when(fifth==0 ~ '4 rounds normal',
                               fifth==1 ~ '4 rounds shifted',
                               fifth==2 ~ '5 rounds'),
-         pfpr = case_when(EIR %in% c(2.31,1.81) ~ 10,
-                          EIR %in% c(14.3,11.1) ~ 30,
-                          EIR %in% c(100,90.5) ~ 60))
+         pfpr = case_when(EIR %in% c(10.2,4.42) ~ 'PfPR: 10',
+                          EIR %in% c(30.3,11.4) ~ 'PfPR: 30',
+                          EIR %in% c(167,43.6) ~ 'PfPR: 60'))
 
 # plot
 ggplot(data = output2) +

@@ -123,6 +123,8 @@ match <- match %>% rename(starting_EIR = init_EIR) %>%
   mutate(ITNuse = as.numeric(ITNuse)) %>%
   select(pfpr, starting_EIR, seas_name, ITN, ITNuse)
 
+summary(match)
+
 # save for other HPC runs
 saveRDS(match, "./02_code/HPC/EIRestimates.rds")
 

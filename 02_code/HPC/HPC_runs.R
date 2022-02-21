@@ -24,8 +24,9 @@ config <- didehpc::didehpc_config(shares = share,
                                   cluster = "fi--didemrchnb",
                                   parallel = FALSE)
 
-obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
+# obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
 obj <- didehpc::queue_didehpc(ctx, config = config)
+
 
 
 # Set up your job --------------------------------------------------------------
