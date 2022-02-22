@@ -79,9 +79,6 @@ daly_components <- function(x,
 
     dplyr::mutate(daly = yll + yld)
 
-  # Need to make lifespan more specific
-  # Some age groups appear to go up to 200 years (if in days)?
-
 }
 
 # run functions
@@ -129,8 +126,8 @@ delivery_cost <- c(0.96, 1.62, 2.67)
 # create combinations of dose cost and delivery cost
 rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
 
-population <- 100000
-sim_length <- 15*365
+population <- dalyoutput$population[[1]]
+sim_length <- dalyoutput$sim_length[[1]]
 
 # Prepare to add costs to dataset
 dalyoutput_cost <- dalyoutput %>%

@@ -334,6 +334,7 @@ runsimGF <- function(population,        # simulation population
     mutate(EIR = starting_EIR,
            warmup = warmup,
            sim_length = sim_length,
+           population = population,
            pfpr = pfpr,
            timestep = timestep - warmup,
            seasonality = seas_name,
@@ -359,7 +360,7 @@ runsimGF <- function(population,        # simulation population
            month = ceiling(timestep/month)) %>%
 
     # only necessary variables
-    dplyr::select(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+    dplyr::select(EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
                   ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
                   starts_with("n_inc_severe"), starts_with("p_inc_severe"),
                   starts_with("n_rtss"),
@@ -369,7 +370,7 @@ runsimGF <- function(population,        # simulation population
                   smc_timesteps, rtss_mass_timesteps) %>%
 
     # take means of populations and sums of cases by month
-    group_by(EIR, warmup, sim_length, pfpr, month, year, seasonality, speciesprop,
+    group_by(EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
              ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
              bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
 

@@ -567,7 +567,7 @@ test <- output %>% filter(costRTSS < -10)
 p <- ggplot(output) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   # geom_density(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
-  geom_histogram(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
+  geom_histogram(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), bins=100) +
   theme_classic() +
   labs(x='RTS,S cost (USD) per dose',
        y='count',
@@ -579,17 +579,18 @@ p <- ggplot(output) +
 
 p
 
-ggsave('./03_output/RTSS_price_dist_stratify.pdf', width=12, height=4)
+ggsave('./03_output/RTSS_price_dist_total.pdf', width=4, height=4)
 
 p + facet_grid(~interventionmin)
 
-ggsave('./03_output/RTSS_price_dist_total.pdf', width=4, height=4)
+ggsave('./03_output/RTSS_price_dist_stratify.pdf', width=12, height=4)
 
 
 # per dose ITN cost ------------------------------------------------------------
 # set up cost vector
-population <- 100000
-sim_length <- 15*365
+population <- scenarios$population[[1]]
+sim_length <- scenarios$sim_length[[1]]
+
 # find most common character value in group
 calculate_mode <- function(x) {
   uniqx <- unique(na.omit(x))
@@ -633,7 +634,8 @@ test <- output %>% filter(costITN < -10)
 # scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
 ggplot(output) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
-  geom_density(aes(x=costITN, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
+  # geom_density(aes(x=costITN, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
+  geom_histogram(aes(x=costITN, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), bins=100) +
   theme_classic() +
   facet_grid(~interventionmin) +
   labs(x='ITN cost (USD) per net',
@@ -644,14 +646,14 @@ ggplot(output) +
   theme(plot.caption.position = "plot") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave('./03_output/ITN_price_dist.pdf', width=12, height=4)
+ggsave('./03_output/ITN_price_dist.pdf', width=8, height=4)
 
 
 
 # per dose SMC cost -------------------------------------------------------------------
 # set up cost vector
-population <- 100000
-sim_length <- 15*365
+population <- scenarios$population[[1]]
+sim_length <- scenarios$sim_length[[1]]
 
 # find most common character value in group
 calculate_mode <- function(x) {
@@ -694,7 +696,8 @@ test <- output %>% filter(costSMC < -10)
 # scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
 ggplot(output) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
-  geom_density(aes(x=costSMC, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
+  # geom_density(aes(x=costSMC, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
+  geom_histogram(aes(x=costSMC, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), bins=100) +
   theme_classic() +
   facet_grid(~interventionmin) +
   labs(x='SMC cost (USD) per dose',
@@ -718,8 +721,8 @@ dalyoutput_cost %>% select(cost_ITN_linear, cost_ITN, ITN) %>% distinct()
 A <- ggplot(dalyoutput_cost %>% filter(ITN=='pyr')) +
   geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
   geom_abline(slope=1) +
-  scale_x_continuous(limits=c(0, 1517500), breaks=c(0, 5e5, 1e6, 1.5e6), labels = function(x) format(x, scientific = TRUE)) +
-  scale_y_continuous(limits=c(0, 3976470)) +
+  scale_x_continuous(limits=c(0, 2975000), labels = function(x) format(x, scientific = TRUE)) +
+  scale_y_continuous(limits=c(0, 5814706)) +
   scale_color_gradient(limits=c(0,0.85)) +
   labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid') +
   theme_classic()
@@ -727,8 +730,8 @@ A <- ggplot(dalyoutput_cost %>% filter(ITN=='pyr')) +
 B <- ggplot(dalyoutput_cost %>% filter(ITN=='pbo')) +
   geom_point(aes(x=cost_ITN_linear, y = cost_ITN, colour=ITNuse2)) +
   geom_abline(slope=1) +
-  scale_x_continuous(limits=c(0, 1517500), breaks=c(0, 5e5, 1e6, 1.5e6), labels = function(x) format(x, scientific = TRUE)) +
-  scale_y_continuous(limits=c(0, 3976470)) +
+  scale_x_continuous(limits=c(0, 2975000), labels = function(x) format(x, scientific = TRUE)) +
+  scale_y_continuous(limits=c(0, 5814706)) +
   scale_color_gradient(limits=c(0,0.85)) +
   labs(x='Linear ITN cost', y='Netz ITN cost', color='ITN use', title='Pyrethroid + PBO') +
   theme_classic()
@@ -754,11 +757,15 @@ ggplot(output) +
 
 ggsave('./03_output/univariate_pfpr.pdf', width=5, height=4)
 
+
 # by resistance and seasonality
+supp.labs <- c("Resistance: 0", "Resistance: 0.4", "Resistance: 0.8")
+names(supp.labs) <- c(0, 0.4, 0.8)
+
 ggplot(output) +
   geom_bar(aes(x=factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), fill=intervention_f), position="fill") +
   labs(x='Seasonality', y='Proportion most cost-effective choice', fill='intervention') +
-  facet_wrap(~resistance) +
+  facet_wrap(~resistance, labeller=labeller(resistance=supp.labs)) +
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
   theme_classic()
 
@@ -783,7 +790,7 @@ output2 <- ITNefficient(CE, 'standard') %>%
 
 ggplot(output2) +
   geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient')), fill=intervention_f), position="fill") +
-  labs(x='PfPR', y='Proportion most cost-effective choice', fill='intervention') +
+  labs(x='ITN efficiency', y='Proportion most cost-effective choice', fill='intervention') +
   theme_classic()
 
 ggsave('./03_output/univariate_ITNefficiency.pdf', width=5, height=4)

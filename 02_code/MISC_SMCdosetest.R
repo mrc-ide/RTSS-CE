@@ -209,8 +209,8 @@ output2 <- output %>%
                               fifth==1 ~ '4 rounds shifted',
                               fifth==2 ~ '5 rounds'),
          pfpr = case_when(EIR %in% c(10.2,4.42) ~ 'PfPR: 10',
-                          EIR %in% c(30.3,11.4) ~ 'PfPR: 30',
-                          EIR %in% c(167,43.6) ~ 'PfPR: 60'))
+                          EIR %in% c(30.3,11.4) ~ 'PfPR: 20',
+                          EIR %in% c(167,43.6) ~ 'PfPR: 40'))
 
 # plot
 ggplot(data = output2) +
@@ -241,3 +241,4 @@ ggplot(data = output3) +
   theme(axis.text.x = element_blank())
 
 ggsave('./03_output/smc_test2.pdf', width=6, height=6)
+
