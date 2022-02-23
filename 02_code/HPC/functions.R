@@ -326,6 +326,8 @@ runsimGF <- function(population,        # simulation population
   params <- set_equilibrium(params, as.numeric(starting_EIR))
 
   # run simulation ----------
+  set.seed(123)
+
   output <- run_simulation(
     timesteps = warmup + sim_length,
     parameters = params,
@@ -399,7 +401,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
   # parameters
   year <- 365
   month <- year/12
-  human_population <- 50000
+  human_population <- 100000
 
   params <- get_parameters(list(
     human_population = human_population,
@@ -483,6 +485,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
 
   params <- set_equilibrium(params, as.numeric(init_EIR))
 
+  set.seed(123)
   output <- run_simulation(
     timesteps = 9 * year,
     parameters = params,
