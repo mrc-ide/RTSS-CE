@@ -97,7 +97,7 @@ ggplot(data = none %>% filter(seasonality != 'perennial')) +
   geom_vline(data = ITNtime, aes(xintercept=itn, alpha='ITN'), lty=2, color='green') +
   labs(x='month', y='clinical incidence (month), 0-5 years', color='PfPR') +
   scale_x_continuous(breaks = seq(1,12,1)) +
-  facet_wrap(seasonality~pfpr, labeller = labeller(pfpr=supp.labs)) +
+  facet_grid(seasonality~pfpr, labeller = labeller(pfpr=supp.labs)) +
   coord_cartesian(xlim = c(0,12)) +
   scale_alpha_manual(values = c(rep(1,3))) +
   guides(alpha = guide_legend(title = 'intervention',
@@ -148,11 +148,16 @@ ggsave('./03_output/impact_cloudI.pdf', width=8, height=7)
 
 table(output$ID)
 summary(output$deltadaly)
-negvalues <- output %>% filter(deltadaly<0) # two negative scenarios
+negvalues <- output %>% filter(deltadaly<0) %>% select(file, pfpr, seasonality, ITN, ITNboost, resistance, SMC, RTSS, cases, cases_baseline, severe_cases, severe_baseline, deaths, deaths_baseline, yll, daly, daly_baseline,  CE, deltadaly, deltacost) # two negative scenarios
 
 supp.labs <- c("ITN use: 0", "ITN use: 0.25", "ITN use: 0.50", "ITN use: 0.75")
 names(supp.labs) <- c(0,.25,.50,.75)
 
+
+# investigate these negative scenarios
+test <- dat %>% filter(file %in% negvalues$file)
+ggplot(test, aes(x=month, y=cases)) +
+  geom_line()
 
 # simple strategies, by baseline ITNuse and seasonality
 # removing dominated strategies
@@ -469,14 +474,14 @@ ggplot(scenarios %>% filter(intervention != 'none'), aes(x=rank, y=CE, fill=inte
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 6.5, lty=2, color='grey') +
   geom_boxplot(alpha=0.3) +
-  scale_y_continuous(limits=c(-1000, 1000)) +
+  scale_y_continuous(limits=c(-250, 500)) +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " DALYs")),
        fill = 'intervention',
        color = 'intervention',
        caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T)))) +
-  annotation_custom(textGrob("Univariate strategies"),xmin=2,xmax=6,ymin=-1200,ymax=-1200) +
-  annotation_custom(textGrob("Mixed strategies"),xmin=7,xmax=13,ymin=-1200,ymax=-1200) +
+  annotation_custom(textGrob("Univariate strategies"),xmin=2,xmax=6,ymin=-330,ymax=-330) +
+  annotation_custom(textGrob("Mixed strategies"),xmin=7,xmax=13,ymin=-330,ymax=-330) +
   scale_x_continuous(breaks=c(0)) +
   coord_cartesian(clip="off") +
   theme_classic() +
@@ -560,14 +565,22 @@ output <- scenarios %>%
 
 # inspect range
 summary(output$costRTSS)
+summary(output[output$interventionmin=='ITN 10% boost',]$costRTSS)
+summary(output[output$interventionmin=='ITN PBO',]$costRTSS)
+summary(output[output$interventionmin=='SMC' & resistance==0,]$costRTSS)
 test <- output %>% filter(costRTSS < -10)
+
+
+summary(output[output$interventionmin=='ITN 10% boost' & output$resistance==0,]$costRTSS)
+summary(output[output$interventionmin=='SMC' & output$resistance==0,]$costRTSS)
+
 
 # plot
 # scale_fill_manual(values=lacroix_palette("Pamplemousse", n=3, type = "discrete"))
 p <- ggplot(output) +
-  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   # geom_density(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), alpha=0.4) +
   geom_histogram(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), bins=100) +
+  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   theme_classic() +
   labs(x='RTS,S cost (USD) per dose',
        y='count',
@@ -579,9 +592,9 @@ p <- ggplot(output) +
 
 p
 
-ggsave('./03_output/RTSS_price_dist_total.pdf', width=4, height=4)
+ggsave('./03_output/RTSS_price_dist_total.pdf', width=7, height=4)
 
-p + facet_grid(~interventionmin)
+p + facet_grid(~interventionmin) +  scale_x_continuous(breaks=seq(-5,10,1), limits=c(-5,10)) +
 
 ggsave('./03_output/RTSS_price_dist_stratify.pdf', width=12, height=4)
 
@@ -743,8 +756,14 @@ ggsave('./03_output/ITN_netz.pdf', width=8, height=4)
 
 
 # univariate stacked histogram patterns ----------------------------------------
-# by pfpr
+RColorBrewer::display.brewer.all()
+RColorBrewer::brewer.pal(5, "Paired")
+colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
+
+
+# by pfpr and seasonality
 output <- scenarios %>%
+  mutate(seasonality=factor(seasonality, levels=c('highly seasonal', 'seasonal', 'perennial'))) %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
   group_by(ID) %>% arrange(ID, CE) %>%
@@ -753,32 +772,24 @@ output <- scenarios %>%
 ggplot(output) +
   geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill") +
   labs(x='PfPR', y='Proportion most cost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(~seasonality) +
   theme_classic()
 
-ggsave('./03_output/univariate_pfpr.pdf', width=5, height=4)
-
-
-# by resistance and seasonality
-supp.labs <- c("Resistance: 0", "Resistance: 0.4", "Resistance: 0.8")
-names(supp.labs) <- c(0, 0.4, 0.8)
-
-ggplot(output) +
-  geom_bar(aes(x=factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), fill=intervention_f), position="fill") +
-  labs(x='Seasonality', y='Proportion most cost-effective choice', fill='intervention') +
-  facet_wrap(~resistance, labeller=labeller(resistance=supp.labs)) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
-  theme_classic()
-
-ggsave('./03_output/univariate_seasonal_resistance.pdf', width=8, height=4)
+ggsave('./03_output/univariate_pfpr_seasonality.pdf', width=8, height=4)
 
 
 # by ITN distribution efficiency
+supp.labs <- c("PfPR: 0.1", "PfPR: 0.2", "PfPR: 0.4")
+names(supp.labs) <- c(0.1, 0.2, 0.4)
+
 ITNefficient <- function(var, label) {
   scenarios %>%
+    mutate(seasonality=factor(seasonality, levels=c('highly seasonal', 'seasonal', 'perennial'))) %>%
     filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
     filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
     group_by(ID) %>% arrange(ID, {{var}}) %>%
-    slice(1L) %>% select(intervention_f, {{var}}) %>%
+    slice(1L) %>% select(intervention_f, seasonality, pfpr, {{var}}) %>%
     mutate(model=label) %>%
     rename(CE = {{var}})
 
@@ -791,9 +802,26 @@ output2 <- ITNefficient(CE, 'standard') %>%
 ggplot(output2) +
   geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient')), fill=intervention_f), position="fill") +
   labs(x='ITN efficiency', y='Proportion most cost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(pfpr~seasonality, labeller=labeller(pfpr=supp.labs)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
   theme_classic()
 
-ggsave('./03_output/univariate_ITNefficiency.pdf', width=5, height=4)
+ggsave('./03_output/univariate_ITNefficiency.pdf', width=9, height=5)
+
+
+# by resistance and seasonality
+supp.labs <- c("PfPR: 0.1", "PfPR: 0.2", "PfPR: 0.4")
+names(supp.labs) <- c(0.1, 0.2, 0.4)
+
+ggplot(output) +
+  geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill") +
+  labs(x='Resistance', y='Proportion most cost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(pfpr~seasonality, labeller=labeller(pfpr=supp.labs)) +
+  theme_classic()
+
+ggsave('./03_output/univariate_seasonal_resistance.pdf', width=9, height=5)
 
 
 

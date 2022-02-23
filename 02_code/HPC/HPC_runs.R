@@ -34,7 +34,7 @@ library(tidyverse)
 year <- 365
 
 # population
-population <- 100000
+population <- 200000
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -64,7 +64,7 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
 
 # run time
 warmup <- 6*year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
-sim_length <- 20*year
+sim_length <- 15*year
 
 # interventions
 ITN <- c('pyr', 'pbo')
@@ -129,14 +129,13 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   filter(exist==0) %>%
   select(-f, -exist)
 
-# to run for test
 t <- obj$enqueue_bulk(combo, runsimGF) # run 500 at a time [1:522,]
 t$status()
 
 beepr::beep(1)
 
-# ------------------------------------------------------------------------------
 
+# ------------------------------------------------------------------------------
 # test run by hand
 # x <- 4
 # test <- runsimGF(population = combo[[x,1]],

@@ -233,11 +233,13 @@ none <- output %>%
            (SMC==0 | (seasonality=='highly seasonal'))) %>%
   rename(daly_baseline = daly,
          cases_baseline = cases,
+         severe_baseline = severe_cases,
+         deaths_baseline = deaths,
          cost_total_baseline = cost_total,
          cost_total_ITNmin_baseline = cost_total_ITNmin,
          cost_total_ITNmax_baseline = cost_total_ITNmax
          ) %>%
-  select(file, ID, daly_baseline, cases_baseline, cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline)
+  select(file, ID, daly_baseline, cases_baseline, severe_baseline, deaths_baseline, cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline)
 
 base_IDs <- none$file
 
