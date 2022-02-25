@@ -1,6 +1,21 @@
-Tables (Admin0 and Admin1)
+File list
 
-Intervention_ITN
+00_PfPR_table_Global_admin0_2000-2019.csv: 
+PfPR tables from malaria atlas project for the years 2000 to 2019
+
+exp_demog.txt:
+exponential demography file from DIDE malaria group
+
+Flat_demog.txt:
+flat demography file from DIDE malaria group
+
+treatment_unit_costs.rda:
+cost table from DIDE malaria group, previous GF work
+
+unit_costs.rda:
+cost table from DIDE malaria group, previous GF work
+
+Intervention_ITN.csv: read below for info from MAP
 
 ========================
 
