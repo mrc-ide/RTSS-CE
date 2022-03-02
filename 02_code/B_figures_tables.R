@@ -11,13 +11,10 @@ library(plotly)
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
 
-# Look here: https://github.com/htopazian/rtss_malariasimulation
-# find ideas in rmarkdowns for figures and insert code if helpful
-
 dat <- readRDS("./03_output/rtss_raw.rds")
-averted <- readRDS("./03_output/rtss_avert.rds")
-dalyoutput <- readRDS('./03_output/dalyoutput.rds')
-dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
+# averted <- readRDS("./03_output/rtss_avert.rds")
+# dalyoutput <- readRDS('./03_output/dalyoutput.rds')
+# dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
 scenarios <- readRDS('./03_output/scenarios.rds')
 
 
@@ -121,6 +118,7 @@ CIcheck %>% group_by(pfpr, seasonality) %>%
 # cost_per_dose <- c(2.69, 6.52, 12.91)
 # delivery_cost <- c(0.96, 1.62, 2.67)
 
+# < all ####
 output <- scenarios %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
   filter(intervention!='none') %>%
@@ -374,15 +372,16 @@ if(season=='seasonal'){
   }
 
   A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
-    geom_line(aes(group=as.factor(ID)), color='lightgrey') +
-    geom_point(aes(color=intervention_f), size=1.3) +
+    geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
+    geom_point(aes(color=intervention_f), size=2) +
     geom_hline(yintercept = 0, lty=2, color="black") +
     geom_vline(xintercept = 0, lty=2, color="black") +
-    facet_grid(~ITNuse, labeller = labeller(ITNuse=supp.labs), scales = "free") +
+    #facet_grid(~ITNuse, labeller = labeller(ITNuse=supp.labs), scales = "free") +
     theme_classic() +
     scale_color_manual(values = colors) +
     theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    labs(y='change in cost (USD)',
+    labs(title='All strategies',
+         y='change in cost (USD)',
          x='change in DALYs averted',
          color='intervention')
 
@@ -395,7 +394,7 @@ if(season=='seasonal'){
   }
 
   # removing dominated strategies
- B <-  output %>%
+ B <- output %>%
     # filter out mixed strategies
     group_by(ID) %>% arrange(ID, deltacost) %>%
     # filter out dominated strategies
@@ -491,23 +490,25 @@ if(season=='seasonal'){
                                 TRUE ~ 0)) %>%
     filter(dominate==0) %>%
     ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
-    geom_line(aes(group=as.factor(ID)), color='lightgrey') +
-    geom_point(aes(color=intervention_f), size=1.3, show.legend = F) +
+    geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
+    geom_point(aes(color=intervention_f), size=2, show.legend = F) +
     geom_hline(yintercept = 0, lty=2, color="black") +
     geom_vline(xintercept = 0, lty=2, color="black") +
-    facet_grid(~ITNuse, labeller = labeller(ITNuse=supp.labs), scales = "free") +
+    #facet_grid(~ITNuse, labeller = labeller(ITNuse=supp.labs), scales = "free") +
     theme_classic() +
     scale_color_manual(values = colors) +
     theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    labs(y='change in cost (USD)',
+    labs(title='Dominated strategies removed',
+         y='change in cost (USD)',
          x='change in DALYs averted',
          color='intervention',
          caption='Assuming resistance == 0') +
     theme(plot.caption.position = "plot")
 
-  (A / B) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+  A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
-  ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=10, height=6)
+ # ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=10, height=6)
+ ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=12, height=5)
 
 }
 
@@ -650,11 +651,22 @@ summary(scenarios$CE)
 text_high <- textGrob("Highest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 text_low <- textGrob("Lowest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 
-ggplot(scenarios %>% filter(intervention != 'none'), aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
+levels <- scenarios %>%
+  mutate(group = case_when(intervention_f %in% c('ITN 10% boost', 'ITN PBO', 'SMC', 'RTS,S SV', 'RTS,S EPI') ~ 'uni',
+                           TRUE ~ 'multi')) %>%
+  group_by(intervention_f, group) %>%
+  summarize(med = median(CE, na.rm=T) )%>% ungroup() %>%
+  arrange(desc(group), med)
+
+scenarios %>% filter(intervention != 'none') %>%
+  mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
+  mutate(rank=as.numeric(intervention_f)) %>%
+
+ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
   geom_hline(yintercept = 0, lty=2, color='grey') +
-  geom_vline(xintercept = 6.5, lty=2, color='grey') +
+  geom_vline(xintercept = 5.5, lty=2, color='grey') +
   geom_boxplot(alpha=0.3) +
-  scale_y_continuous(limits=c(-250, 500)) +
+  coord_cartesian(ylim=c(-250, 500), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " DALYs")),
        fill = 'intervention',
@@ -663,49 +675,11 @@ ggplot(scenarios %>% filter(intervention != 'none'), aes(x=rank, y=CE, fill=inte
   annotation_custom(textGrob("Univariate strategies"),xmin=2,xmax=6,ymin=-330,ymax=-330) +
   annotation_custom(textGrob("Mixed strategies"),xmin=7,xmax=13,ymin=-330,ymax=-330) +
   scale_x_continuous(breaks=c(0)) +
-  coord_cartesian(clip="off") +
   theme_classic() +
   theme(plot.caption.position = "plot")
 
 
 ggsave('./03_output/box_whisker_CE.pdf', width=10, height=5)
-
-# per dose RTSS I --------------------------------------------------------------
-# set up cost vector
-cost_per_dose2 <- seq(-50,100,.5) %>% as_tibble %>% rename(cost_per_dose2=value)
-# pull out univariate scenarios
-output <- scenarios %>% filter(intervention %in% c('RTS,S SV', 'RTS,S EPI', 'SMC', 'none', 'ITN 10% boost', 'ITN PBO')) %>%
-  select(file:dose4, daly, ITNcost:intervention) %>% merge(cost_per_dose2) %>%
-  mutate(cost_vax2 = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose2),
-         cost_total2 = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax2)
-# checks
-test <- output %>% filter(RTSS=='SV' & pfpr==0.2 & seasonality=='seasonal') %>%
-  select(cost_per_dose, delivery_cost, cost_vax, cost_per_dose2, cost_vax2) %>%
-  mutate(checkdosecost=(cost_per_dose+delivery_cost)/cost_per_dose2,
-         checkvaxcost=cost_vax/cost_vax2)
-head(table(test$checkdosecost, test$checkvaxcost)) # fractions should be the same
-output %>% group_by(ID) %>% summarize(n=n())
-# rank order CE
-test <- output %>% select(ID, pfpr, seasonality, ITNuse, resistance, cost_per_dose2, intervention, daly, daly_baseline, cost_total2, cost_total_baseline) %>%
-  mutate(CE = (cost_total2 - cost_total_baseline) / (daly_baseline - daly)) %>%
-  ungroup() %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2) %>%
-  arrange(ID, seasonality, pfpr, ITNuse, resistance, cost_per_dose2, CE) %>%
-  slice_head(n = 1) %>%
-  ungroup() %>%
-  mutate(rank = ifelse(intervention %in% c('RTS,S EPI', 'RTS,S SV'), cost_per_dose2, NA)) %>%
-  group_by(ID, seasonality, pfpr, ITNuse, resistance) %>%
-  summarize(rank2 = max(rank, na.rm=T))
-table(test$rank2)
-ggplot(data=test) +
-  geom_bar(aes(x=rank2, y=..count..,fill=as_factor(resistance), group=as_factor(resistance))) +
-  theme_classic() +
-  labs(x='RTS,S cost (USD) per dose',
-       y='count',
-       fill='resistance',
-       caption='13 scenarios where RTS,S is most CE >=$100 (all at resistance = 0.8)\n1 scenario where RTS,S is most CE == -$40') +
-  scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10)) +
-  theme(plot.caption.position = "plot")
 
 
 # per dose RTS,S cost ----------------------------------------------------------
@@ -765,7 +739,7 @@ p <- ggplot(output) +
   labs(x='RTS,S cost (USD) per dose',
        y='count',
        fill='resistance',
-       caption=paste0('range = ', round(min(output$costRTSS)), ' to ', round(max(output$costRTSS)))) +
+       caption=paste0('range = ', round(min(output$costRTSS)), ' to ', round(max(output$costRTSS)), ' USD')) +
   scale_x_continuous(breaks=seq(-10,10,1), limits=c(-10,10)) +
   theme(plot.caption.position = "plot") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -780,23 +754,35 @@ ggsave('./03_output/RTSS_price_dist_stratify.pdf', width=12, height=4)
 
 
 # by season
+
+summary(output$costRTSS)
+summary(output[output$seasonality=='highly seasonal',]$costRTSS)
+summary(output[output$seasonality=='seasonal',]$costRTSS)
+summary(output[output$seasonality=='perennial',]$costRTSS)
+
 RTSSseason <- function(season) {
 
-  output2 <- output %>% filter(seasonality==season)
+  output2 <- output %>% filter(seasonality == season)
+
+  q25 <- round(quantile(output2$costRTSS, probs = 0.25, na.rm=T),2)
+  med <- round(median(output2$costRTSS, na.rm=T),2)
+  q75 <- round(quantile(output2$costRTSS, probs = 0.75, na.rm=T),2)
 
   ggplot(output2) +
-    geom_histogram(aes(x=costRTSS, y=..count.., fill=as_factor(resistance), group=as_factor(resistance)), bins=100) +
+    geom_boxplot(aes(x=seasonality, y=costRTSS), fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4) +
+    geom_text(aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .5, nudge_x = -.2) +
+    geom_text(aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .5, nudge_x = -.2) +
+    geom_text(aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .5, nudge_x = -.2) +
     geom_vline(xintercept = 0, lty = 2, color = 'grey') +
     theme_classic() +
-    labs(x='RTS,S cost (USD) per dose',
-         y='Count',
-         fill='resistance',
-         caption=paste0('range = ', round(min(output2$costRTSS)), ' to ', round(max(output2$costRTSS)))) +
-    scale_x_continuous(breaks=seq(-5,15,1), limits=c(-5,15)) +
+    labs(y='RTS,S cost (USD) per dose',
+         x='',
+         caption=paste0('range = ', round(min(output2$costRTSS)), ' to ', round(max(output2$costRTSS)), ' USD')) +
+    coord_cartesian(ylim = c(-5,15)) +
     theme(plot.caption.position = "plot") +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
-  ggsave(paste0('./03_output/RTSS_price_dist_',season,'.pdf'), width=7, height=4)
+  ggsave(paste0('./03_output/RTSS_price_dist_',season,'.pdf'), width=5, height=4)
 
 }
 
@@ -805,10 +791,28 @@ RTSSseason('seasonal')
 RTSSseason('perennial')
 
 
-summary(output$costRTSS)
-summary(output[output$seasonality=='highly seasonal',]$costRTSS)
-summary(output[output$seasonality=='seasonal',]$costRTSS)
-summary(output[output$seasonality=='perennial',]$costRTSS)
+  # all seasons
+seasoncosts <- output %>% group_by(seasonality) %>%
+  summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm=T),2),
+            med = round(median(costRTSS, na.rm=T),2),
+            q75 = round(quantile(costRTSS, probs = 0.75, na.rm=T),2))
+
+ggplot(output) +
+  geom_boxplot(aes(x=factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y=costRTSS), fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .5, nudge_x = -.2) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .5, nudge_x = -.2) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .5, nudge_x = -.2) +
+  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
+  theme_classic() +
+  labs(y='RTS,S cost (USD) per dose',
+       x='',
+       caption=paste0('range = ', round(min(output2$costRTSS)), ' to ', round(max(output2$costRTSS)))) +
+  coord_cartesian(ylim = c(-5,15)) +
+  theme(plot.caption.position = "plot")
+
+ggsave('./03_output/RTSS_price_dist_all.pdf', width=6, height=5)
+
+
 
 
 # per dose ITN cost ------------------------------------------------------------
@@ -973,7 +977,7 @@ RColorBrewer::display.brewer.all()
 RColorBrewer::brewer.pal(5, "Paired")
 colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
 
-
+# < all ####
 # by pfpr and seasonality
 output <- scenarios %>%
   mutate(seasonality=factor(seasonality, levels=c('highly seasonal', 'seasonal', 'perennial'))) %>%
