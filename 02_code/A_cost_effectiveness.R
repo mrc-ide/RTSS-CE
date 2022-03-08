@@ -23,7 +23,7 @@ summary(dalyoutput$age_lower); summary(dalyoutput$age_upper)
 # YLD = cases and severe cases * disability weighting  * episode_length
 # CE = $ per event (case, death DALY) averted
 
-# Pete code: https://github.com/mrc-ide/gf/blob/69910e798a2ddce240c238d291bc36ea40661b90/R/epi.R
+# Reference code: https://github.com/mrc-ide/gf/blob/69910e798a2ddce240c238d291bc36ea40661b90/R/epi.R
 # Weights from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4772264/ {Gunda _et al_, 2016}
 
 # mortality
@@ -31,6 +31,7 @@ mortality_rate <- function(x,
                            scaler = 0.215,           # severe case to death scaler
                            treatment_scaler = 0.5) { # treatment modifier
   x %>%
+    # dplyr::mutate(mortality_rate = scaler * .data$sev) %>% # mortality rate alternative
     dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) %>% # mortality rate
     dplyr::mutate(deaths = .data$mortality_rate * .data$n)  # deaths
 }
@@ -97,12 +98,18 @@ dalyoutput <- dalyoutput %>%
   select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
   group_by(file) %>%                      # group to condense to one record per run
   mutate(n_91.25_1825 = ifelse(age=='91.25-1825', n, 0)) %>% # create variable for n ages 0.25-5 years to use in costing
-  mutate_at(vars(n, n_91.25_1825, inc_clinical:daly), sum, na.rm=T) %>%      # condense outputs over all ages in population
+  # create vars for childhood cases for PCV comparison
+  mutate(n_0_1825 = ifelse(age %in% c('0-91.25', '91.25-1825'), n, 0),
+         u5_cases = ifelse(age %in% c('0-91.25', '91.25-1825'), cases, 0),
+         u5_dalys = ifelse(age %in% c('0-91.25', '91.25-1825'), daly, 0)) %>%
+  mutate_at(vars(n, n_91.25_1825, n_0_1825, u5_cases, u5_dalys, inc_clinical:daly), sum, na.rm=T) %>%  # condense outputs over all ages in population
   select(-age, -age_upper, -age_lower) %>%
   distinct()
 
 # check that n_91.25_1825 var is created correctly
 summary(dalyoutput$n_91.25_1825)
+summary(dalyoutput$n_0_1825)
+summary(dalyoutput$u5_dalys)
 
 saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
@@ -338,6 +345,6 @@ ggplot(dalyoutput_cost) +
   geom_abline(slope=1) +
   theme_classic()
 
-################################################################################
+#------------------------------------------------------------------------------#
 
 
