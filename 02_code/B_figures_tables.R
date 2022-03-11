@@ -55,7 +55,7 @@ ggsave('./03_output/seasonality_15yrs.pdf', width=10, height=4)
 
 # seasonality 1 year -----------------------------------------------------------
 # pull out baseline settings with no intervention
-output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0)
+output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') | (seasonality == 'perennial' & RTSS == 'none')) & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0)
 
 # pull out intervention timings
 SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
@@ -83,13 +83,14 @@ ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
 
 none <- dat %>%
   filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' &
-           resistance == 0 & (SMC == 0 | (seasonality == 'highly seasonal')))
+           resistance == 0 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
+  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal')))
 
 # plot
 supp.labs <- c("PfPR: 0.1", "PfPR: 0.2", "PfPR: 0.4")
 names(supp.labs) <- c(0.1, 0.2, 0.4)
 
-ggplot(data = none %>% filter(seasonality != 'perennial')) +
+ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   geom_line(aes(x = month, y = n_inc_clinical_91.25_1825/n_91.25_1825), alpha = 0.8) +
   geom_rect(data = SMCtime[SMCtime$seasonality=='highly seasonal',],
             aes(xmin = min(smc, na.rm = T), xmax = max(smc, na.rm = T)+1, ymin = 0, ymax = 0.3), lty = 2, fill = '#F6A1A5', alpha = 0.02) +
@@ -100,7 +101,7 @@ ggplot(data = none %>% filter(seasonality != 'perennial')) +
   geom_vline(data = ITNtime, aes(xintercept = itn, alpha = 'ITN'), lty = 2, color = '#1BB6AF') +
   labs(x = 'month', y = 'monthly clinical incidence, 0-5 years') +
   scale_x_continuous(breaks = seq(1,12,1)) +
-  facet_grid(seasonality ~ pfpr, labeller = labeller(pfpr=supp.labs)) +
+  facet_grid(factor(seasonality, levels=c('perennial','seasonal','highly seasonal')) ~ pfpr, labeller = labeller(pfpr=supp.labs)) +
   coord_cartesian(xlim = c(0,12), ylim = c(0,0.3)) +
   scale_alpha_manual(values = c(rep(1,3))) +
   guides(alpha = guide_legend(title = 'intervention',
@@ -120,6 +121,85 @@ CIcheck %>% group_by(pfpr, seasonality) %>%
 
 # does not meet policy in low PfPR settings, but it is useful to compare
 
+
+# seasonality 2 years ----------------------------------------------------------
+# pull out baseline settings with no intervention
+output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') | (seasonality == 'perennial' & RTSS == 'none')) & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 & pfpr == 0.4) %>% filter(month <= 12)
+
+# copy dataset twice for pre- and post-intervention
+output <- rbind(output, output %>% mutate(month = month-13))
+
+# pull out intervention timings
+SMCtime <- output %>% select(smc_timesteps, seasonality) %>% filter(seasonality!='perennial') %>%
+  group_by(seasonality) %>%
+  mutate(t1 = ifelse(seasonality == 'seasonal', unlist(smc_timesteps)[[1]], unlist(smc_timesteps)[[25]]),
+         t2 = ifelse(seasonality == 'seasonal', unlist(smc_timesteps)[[2]], unlist(smc_timesteps)[[26]]),
+         t3 = ifelse(seasonality == 'seasonal', unlist(smc_timesteps)[[3]], unlist(smc_timesteps)[[27]]),
+         t4 = ifelse(seasonality == 'seasonal', unlist(smc_timesteps)[[4]], unlist(smc_timesteps)[[28]]),
+         t5 = ifelse(seasonality == 'seasonal', unlist(smc_timesteps)[[5]], NA)) %>%
+  distinct() %>%
+  pivot_longer(cols = t1:t5, names_to = "time", values_to = "month") %>%
+  mutate(month = month / (365/12) + 1, intervention='SMC') %>% select(-smc_timesteps, -time)
+
+SMCtime <- rbind(SMCtime, SMCtime %>% filter(seasonality == 'highly seasonal') %>% mutate(month = month-13)) %>%
+  filter(!is.na(month))
+
+RTSStime <- output %>% select(rtss_mass_timesteps, seasonality) %>%
+  group_by(seasonality) %>%
+  mutate(month = unlist(rtss_mass_timesteps)[[1]]) %>%
+  distinct() %>%
+  mutate(month = month / (365/12) + 1, intervention='RTS,S SV dose 3',
+         month = ifelse(seasonality=='perennial', 0, month)) %>% select(-rtss_mass_timesteps)
+
+ITNtime <- output %>% select(bednet_timesteps, seasonality) %>%
+  group_by(seasonality) %>%
+  mutate(month = unlist(bednet_timesteps)[[3]]) %>%
+  distinct() %>%
+  mutate(month = month / (365/12) + 1, intervention='ITN *') %>% select(-bednet_timesteps)
+
+ITNtime <- rbind(ITNtime, ITNtime %>% mutate(month = month-13))
+
+interventions <- rbind(SMCtime, RTSStime, ITNtime)
+
+none <- dat %>%
+  filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' &
+           resistance == 0 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
+  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+  filter(month <= 12 & pfpr == 0.4)
+
+none <- rbind(none, none %>% mutate(month = month-13))
+
+
+
+my_text <- data_frame(seasonality = 'perennial',
+                      lab = c('pre-intervention', 'post-intervention'),
+                      x = c(-6, 7),
+                      y = c(0.25,0.25))
+
+
+# plot
+ggplot(data = none) + # %>% filter(seasonality != 'perennial')
+  geom_line(aes(x = month, y = n_inc_clinical_91.25_1825/n_91.25_1825), alpha = 0.8) +
+  geom_rect(aes(xmin=-0.9, xmax=0.9, ymin=-1, ymax=0.3), fill='white') +
+  geom_vline(aes(xintercept=0)) +
+  geom_rect(data = interventions %>% filter(intervention=='RTS,S SV dose 3'), aes(xmin=1, xmax=12, ymin=0.01, ymax=0.03, fill = 'RTSS'), alpha = 0.1) +
+  geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month<0),
+            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
+  geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month>0),
+            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
+  geom_rect(data = interventions %>% filter(seasonality=='seasonal' & intervention=='SMC'),
+            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
+  geom_vline(data = interventions, aes(xintercept = month, color = intervention), lty = 2) +
+  geom_text(data = my_text, aes(x = x,  y = y, label = lab)) +
+  labs(x = 'month', y = 'monthly clinical incidence, 0-5 years', color = '', fill = '') +
+  scale_x_continuous(breaks = seq(-12,12,1)) +
+  facet_grid(factor(seasonality, levels=c('perennial','seasonal','highly seasonal')) ~ .) +
+  coord_cartesian(xlim = c(-12,12), ylim = c(0,0.3)) +
+  scale_fill_manual(values = c('#088BBE','#F6A1A5'), labels=c('RTS,S age-based','SMC coverage')) +
+  scale_color_manual(values = c('#1BB6AF','#088BBE','#F6A1A5')) +
+  theme_classic()
+
+ggsave('./03_output/seasonality_2yr.pdf', width=8, height=4)
 
 # delta CE change --------------------------------------------------------------
 
@@ -820,7 +900,7 @@ levels <- scenarios %>%
   summarize(med = median(CE, na.rm=T) )%>% ungroup() %>%
   arrange(desc(group), med)
 
-# plot
+# plot of cost per DALY averted
 scenarios %>% filter(intervention != 'none') %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
   mutate(rank=as.numeric(intervention_f)) %>%
@@ -842,6 +922,33 @@ ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=interv
   theme(plot.caption.position = "plot")
 
 ggsave('./03_output/box_whisker_CE.pdf', width=10, height=5)
+
+
+# plotting with cost per cases averted
+# inspect range of CE case values
+summary(scenarios$CE_case)
+
+scenarios %>% filter(intervention != 'none') %>%
+  mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
+  mutate(rank=as.numeric(intervention_f)) %>%
+
+ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=intervention)) +
+  geom_hline(yintercept = 0, lty=2, color='grey') +
+  geom_vline(xintercept = 5.5, lty=2, color='grey') +
+  geom_boxplot(alpha=0.3) +
+  coord_cartesian(ylim=c(-1, 35), clip="off") +
+  labs(x='',
+       y=expression(paste(Delta," cost / ", Delta, " cases")),
+       fill = 'intervention',
+       color = 'intervention',
+       caption=paste0('range in cost / cases: ', round(min(scenarios$CE_case, na.rm = T)), ' to ', round(max(scenarios$CE_case, na.rm=T)))) +
+  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-4,ymax=-4) +
+  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-4,ymax=-4) +
+  scale_x_continuous(breaks=c(0)) +
+  theme_classic() +
+  theme(plot.caption.position = "plot")
+
+ggsave('./03_output/box_whisker_CE_cases.pdf', width=10, height=5)
 
 
 # per dose RTS,S cost ----------------------------------------------------------
@@ -1149,11 +1256,12 @@ output2 <- output %>%
 
 # plot
 ggplot(output, aes(x=cost_ITN_linear, y = cost_ITN, color=target_use)) +
+  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=4, color='chartreuse1', fill='chartreuse1') +
+  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=3.5, color='chartreuse1', fill='chartreuse1')+
   geom_abline(slope=1, size=1, lty=2, alpha=0.3) +
   geom_point(size=2) +
-  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=2, color='green') +
   geom_line(alpha=0.5, size=1) +
-  geom_ribbon(aes(ymin=cost_ITNmin, ymax=cost_ITNmax), color=NA, fill='cornflower blue', alpha=0.2) +
+  geom_ribbon(aes(ymin=cost_ITNmin, ymax=cost_ITNmax), color=NA, fill='cornflower blue', alpha=0.4) +
   scale_color_gradient(limits=c(0,0.85)) +
   scale_shape_manual(values=c(1), labels=c('value used in simulation')) +
   facet_grid(~net) +
@@ -1450,6 +1558,7 @@ ggplot(data = output2) +
 ggsave('./03_output/RTSS_additional_impact.pdf', width=6, height=3)
 
 
+
 # ICER table -------------------------------------------------------------------
 
 # calculate change in dalys and cost
@@ -1589,4 +1698,34 @@ merge %>% group_by(intervention) %>%
             ICER_m = median(ICER, na.rm=T),
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
+
+
+
+
+
+# ICERs among children ---------------------------------------------------------
+scenarios %>% ungroup() %>%
+  #group_by(seasonality) %>%
+  summarize(n = n(),
+            median = median(CE_u5, na.rm=T),
+            q25 = quantile(CE_u5, prob=0.25, na.rm=T),
+            q75 = quantile(CE_u5, prob=0.75, na.rm=T))
+
+scenarios %>% ungroup() %>% filter(resistance==0) %>%
+  group_by(ITNuse) %>%
+  summarize(n = n(),
+            median = median(CE_u5, na.rm=T),
+            q25 = quantile(CE_u5, prob=0.25, na.rm=T),
+            q75 = quantile(CE_u5, prob=0.75, na.rm=T))
+
+scenarios %>% ungroup() %>% filter(resistance==0) %>%
+  group_by(ITNuse) %>%
+  summarize(n = n(),
+            median = median(CE, na.rm=T),
+            q25 = quantile(CE, prob=0.25, na.rm=T),
+            q75 = quantile(CE, prob=0.75, na.rm=T))
+
+# ------------------------------------------------------------------------------
+
+
 

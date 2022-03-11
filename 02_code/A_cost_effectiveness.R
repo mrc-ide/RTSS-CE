@@ -31,8 +31,8 @@ mortality_rate <- function(x,
                            scaler = 0.215,           # severe case to death scaler
                            treatment_scaler = 0.5) { # treatment modifier
   x %>%
-    # dplyr::mutate(mortality_rate = scaler * .data$sev) %>% # mortality rate alternative
-    dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) %>% # mortality rate
+    dplyr::mutate(mortality_rate = scaler * .data$sev) %>% # mortality rate alternative
+    # dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) %>% # mortality rate
     dplyr::mutate(deaths = .data$mortality_rate * .data$n)  # deaths
 }
 
@@ -97,17 +97,19 @@ summary(dalyoutput$yld)
 dalyoutput <- dalyoutput %>%
   select(-inc, -sev, -mortality_rate) %>% # get rid of rate vars
   group_by(file) %>%                      # group to condense to one record per run
-  mutate(n_91.25_1825 = ifelse(age=='91.25-1825', n, 0)) %>% # create variable for n ages 0.25-5 years to use in costing
+
   # create vars for childhood cases for PCV comparison
   mutate(n_0_1825 = ifelse(age %in% c('0-91.25', '91.25-1825'), n, 0),
+         n_91.25_1825 = ifelse(age=='91.25-1825', n, 0), # SMC denominator
          u5_cases = ifelse(age %in% c('0-91.25', '91.25-1825'), cases, 0),
+         u5_severe = ifelse(age %in% c('0-91.25', '91.25-1825'), severe_cases, 0),
          u5_dalys = ifelse(age %in% c('0-91.25', '91.25-1825'), daly, 0)) %>%
-  mutate_at(vars(n, n_91.25_1825, n_0_1825, u5_cases, u5_dalys, inc_clinical:daly), sum, na.rm=T) %>%  # condense outputs over all ages in population
+
+  mutate_at(vars(n, n_0_1825, n_91.25_1825, u5_cases, u5_severe, u5_dalys, inc_clinical:daly), sum, na.rm=T) %>%  # condense outputs over all ages in population
   select(-age, -age_upper, -age_lower) %>%
   distinct()
 
-# check that n_91.25_1825 var is created correctly
-summary(dalyoutput$n_91.25_1825)
+# checks
 summary(dalyoutput$n_0_1825)
 summary(dalyoutput$u5_dalys)
 
@@ -195,14 +197,15 @@ nets_distributed_max <- rename(nets_distributed_max, annual_percapita_nets_distm
 nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max)
 
 
-# Assumptions (decided):
+# Assumptions:
 # Using median half life
 # Using minimum use rate (88%) allowing to give 85% usage (this is between median and max)
 # Extrapolating Loess curve according to curve trend
-# Assuming net loss like in MAP paper (smooth compact)
+# Assuming net loss is like in MAP paper (smooth compact)
 
 # save output in case changes in package require changes in code:
 saveRDS(nets_distributed, './03_output/net_usage_vs_nets_distributed.rds')
+
 
 # create cost variables
 # 77% of treatment costs are from the public sector (DHS, SSA)
@@ -222,7 +225,12 @@ dalyoutput_cost <- dalyoutput_cost %>%
 
          cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax, # TOTAL
          cost_total_ITNmin = cost_ITNmin + cost_clinical + cost_severe + cost_SMC + cost_vax,
-         cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax)
+         cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax,
+    # cost just among children
+         cost_total_u5 = n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost + # cost ITNs
+           ((u5_cases-u5_severe) * treatment * TREATcost)*.77 + # cost clinical
+           (u5_severe * treatment * SEVcost)*.77 +  # cost severe
+           cost_SMC + cost_vax) # cost SMC and cost VAX are all among children
 
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
@@ -242,19 +250,31 @@ none <- output %>%
          cases_baseline = cases,
          severe_baseline = severe_cases,
          deaths_baseline = deaths,
+
+         u5_dalys_baseline = u5_dalys,
+         u5_cases_baseline = u5_cases,
+         u5_severe_baseline = u5_severe,
+
          cost_total_baseline = cost_total,
          cost_total_ITNmin_baseline = cost_total_ITNmin,
-         cost_total_ITNmax_baseline = cost_total_ITNmax
+         cost_total_ITNmax_baseline = cost_total_ITNmax,
+         cost_total_u5_baseline = cost_total_u5,
          ) %>%
-  select(file, ID, daly_baseline, cases_baseline, severe_baseline, deaths_baseline, cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline)
+  select(file, ID, daly_baseline, cases_baseline, severe_baseline, deaths_baseline,
+         u5_dalys_baseline, u5_cases_baseline, u5_severe_baseline,
+         cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline, cost_total_u5_baseline)
 
 base_IDs <- none$file
 
 scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
   left_join(none %>% select(-file), by=c('ID')) %>%
   mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly),
+         CE_u5 = (cost_total - cost_total_baseline) / (u5_dalys_baseline - u5_dalys),
          CE_ITNmin = (cost_total_ITNmin - cost_total_ITNmin_baseline) / (daly_baseline - daly),
-         CE_ITNmax = (cost_total_ITNmax - cost_total_ITNmax_baseline) / (daly_baseline - daly)) %>% # ICER
+         CE_ITNmax = (cost_total_ITNmax - cost_total_ITNmax_baseline) / (daly_baseline - daly),
+         CE_case = (cost_total - cost_total_baseline) / (cases_baseline - cases),
+         CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases)
+         ) %>% # ICER
   mutate(intervention = case_when(
 
     ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'none',
@@ -288,6 +308,7 @@ summary(scenarios$CE)
 test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE) # all negative CE scenarios have resistance except 2
 
 saveRDS(scenarios, './03_output/scenarios.rds')
+
 
 
 # data checks ##################################################################
