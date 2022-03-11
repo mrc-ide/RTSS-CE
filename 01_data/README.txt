@@ -3,6 +3,9 @@ File list
 00_PfPR_table_Global_admin0_2000-2019.csv: 
 PfPR tables from malaria atlas project for the years 2000 to 2019
 
+2020_GBD2021_Africa_ITN_Coverage_2019:
+raster of ITN coverage data from malaria atlas project for year 2019
+
 exp_demog.txt:
 exponential demography file from DIDE malaria group
 
