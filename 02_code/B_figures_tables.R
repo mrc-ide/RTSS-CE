@@ -5,6 +5,8 @@ library(data.table)
 library(patchwork)
 library(grid)
 library(LaCroixColoR)
+library(malariaAtlas)
+library(raster)
 
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
@@ -1457,6 +1459,7 @@ univariateseason('perennial')
 # https://malariaatlas.org/research-project/the-impact-of-malaria-control-on-plasmodium-falciparum-in-africa-2000-2015/
 lacroix_palettes$Pamplemousse
 
+# import ITN data from MAP
 nets_data <- read_csv('./01_data/Intervention_ITN.csv') %>% arrange(`2015`) %>%
   mutate(Name_f = factor(Name, levels=Name))
 
@@ -1467,6 +1470,22 @@ ggplot(nets_data) +
   geom_rect(xmin=1, xmax=43, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
   geom_point(aes(x=Name_f, y = `2015`)) +
   labs(x='Country', y='ITN use by country, 2015') +
+  scale_x_discrete(labels = scales::wrap_format(20)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# OR try MAP data
+SSA_ITN <- readRDS('./03_output/MAP_ITN.rds') %>% arrange(median) %>%
+  filter(!is.na(median)) %>%
+  mutate(name_0 = factor(name_0, levels=name_0))
+
+ggplot(SSA_ITN) +
+  geom_rect(xmin=1, xmax=47, ymin=-0.01, ymax=.25, fill="#F6A1A5", alpha=0.009) +
+  geom_rect(xmin=1, xmax=47, ymin=.25, ymax=.50, fill="#F8CD9C", alpha=0.01) +
+  geom_rect(xmin=1, xmax=47, ymin=.50, ymax=.75, fill="#1BB6AF", alpha=0.005) +
+  geom_rect(xmin=1, xmax=47, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
+  geom_pointrange(aes(x=name_0, y=median, ymin=min, ymax=max), lwd=.3) +
+  labs(x='Country', y='ITN use by country, 2019') +
   scale_x_discrete(labels = scales::wrap_format(20)) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
