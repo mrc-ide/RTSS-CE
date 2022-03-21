@@ -1,12 +1,11 @@
 # Figures & Tables -------------------------------------------------------------
 # packages
+library(sf)
 library(tidyverse)
 library(data.table)
 library(patchwork)
 library(grid)
 library(LaCroixColoR)
-library(malariaAtlas)
-library(raster)
 
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
@@ -171,8 +170,6 @@ none <- dat %>%
 
 none <- rbind(none, none %>% mutate(month = month-13))
 
-
-
 my_text <- data_frame(seasonality = 'perennial',
                       lab = c('pre-intervention', 'post-intervention'),
                       x = c(-6, 7),
@@ -182,8 +179,6 @@ my_text <- data_frame(seasonality = 'perennial',
 # plot
 ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   geom_line(aes(x = month, y = n_inc_clinical_91.25_1825/n_91.25_1825), alpha = 0.8) +
-  geom_rect(aes(xmin=-0.9, xmax=0.9, ymin=-1, ymax=0.3), fill='white') +
-  geom_vline(aes(xintercept=0)) +
   geom_rect(data = interventions %>% filter(intervention=='RTS,S SV dose 3'), aes(xmin=1, xmax=12, ymin=0.01, ymax=0.03, fill = 'RTSS'), alpha = 0.1) +
   geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month<0),
             aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
@@ -192,6 +187,8 @@ ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   geom_rect(data = interventions %>% filter(seasonality=='seasonal' & intervention=='SMC'),
             aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
   geom_vline(data = interventions, aes(xintercept = month, color = intervention), lty = 2) +
+  geom_rect(aes(xmin=-0.9, xmax=0.9, ymin=-1, ymax=0.3), fill='white') +
+  geom_vline(aes(xintercept=0)) +
   geom_text(data = my_text, aes(x = x,  y = y, label = lab)) +
   labs(x = 'month', y = 'monthly clinical incidence, 0-5 years', color = '', fill = '') +
   scale_x_continuous(breaks = seq(-12,12,1)) +
@@ -201,7 +198,8 @@ ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   scale_color_manual(values = c('#1BB6AF','#088BBE','#F6A1A5')) +
   theme_classic()
 
-ggsave('./03_output/seasonality_2yr.pdf', width=8, height=4)
+ggsave('./03_output/seasonality_2yr.pdf', width=8, height=3)
+
 
 # delta CE change --------------------------------------------------------------
 
@@ -1743,6 +1741,42 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
             median = median(CE, na.rm=T),
             q25 = quantile(CE, prob=0.25, na.rm=T),
             q75 = quantile(CE, prob=0.75, na.rm=T))
+
+# DHS Nigeria ------------------------------------------------------------------
+
+dat_all <- readRDS("./03_output/combined_DHS_data_admin1.rds")
+
+
+A <- ggplot(dat_all) +
+  geom_sf(aes(fill = prop_DTP3_vacc)) +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x="", y="", fill = "children with DPT3") +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.ticks=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank())
+
+B <- ggplot(dat_all) +
+  geom_sf(aes(fill = prop_itn)) +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x="", y="", fill = "children with an ITN") +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.ticks=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank())
+
+C <- ggplot(dat_all) +
+  geom_sf(aes(fill = prop_vac_y_int_n)) +
+  scale_fill_viridis_c(option = "magma") +
+labs(x="", y="", fill = "children with DPT3 \nand no ITN") +
+theme_bw() +
+theme(panel.border = element_blank(),
+      panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+      axis.ticks=element_blank(), axis.text.x=element_blank(), axis.text.y=element_blank())
+
+A + B + C + plot_layout(nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/DHS_DP3_ITN.pdf', width=15, height=5)
 
 # ------------------------------------------------------------------------------
 
