@@ -31,7 +31,7 @@ mortality_rate <- function(x,
                            scaler = 0.215,           # severe case to death scaler
                            treatment_scaler = 0.5) { # treatment modifier
   x %>%
-    dplyr::mutate(mortality_rate = scaler * .data$sev) %>% # mortality rate alternative
+    dplyr::mutate(mortality_rate = scaler * .data$sev) %>% # mortality rate alternative (consistent with old ICL analysis)
     # dplyr::mutate(mortality_rate = (1 - (treatment_scaler * .data$treatment)) * scaler * .data$sev) %>% # mortality rate
     dplyr::mutate(deaths = .data$mortality_rate * .data$n)  # deaths
 }
