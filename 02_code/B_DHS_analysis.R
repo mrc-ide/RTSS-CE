@@ -340,13 +340,18 @@ saveRDS(dat_start, "./03_output/individual_DHS_data.rds")
 
 # models -----------------------------------------------------------------------
 dat_start <- readRDS("./03_output/individual_DHS_data.rds") %>%
-  filter(hv023 %in% c(51, 52)) %>% # limit to admin1 Akwa Ibom
+  filter(hv023 %in% c(51,52)) %>% # limit to admin1 Akwa Ibom
   mutate(travel60 = travel/60)
+
+# plot clusters to ensure correct admin1 was selected
+ggplot() +
+  geom_sf(data = st_as_sf(shp)) +
+  geom_sf(data = st_as_sf(dat_start))
 
 # create survey design object
 DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start)
 
-# add mean travel
+# group data by cluster
 plotd <- dat_start %>% group_by(CLUSTER) %>%
   summarize(dpt3 = mean(dpt3, na.rm=T),
             itn = mean(itn, na.rm=T),
@@ -421,5 +426,13 @@ survmean <- function(var){
 }
 
 map_dfr(c('itn_access','itn','dpt3','vac_y_itn_n'), survmean)
+summary(dat_start$PfPRbuff)
+
+PfPR2 <- malariaAtlas::getRaster(
+  surface = 'Plasmodium falciparum PR2 - 10 version 2020',
+  year = 2018,
+  shp = shp)
 
 
+adminselect <- shp[shp$name_1=='Akwa Ibom',]
+raster::extract(PfPR2, adminselect, weights=TRUE, fun=mean, na.rm=T)

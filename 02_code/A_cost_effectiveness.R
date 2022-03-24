@@ -214,6 +214,15 @@ dalyoutput_cost <- dalyoutput_cost %>%
             by=c('ITNuse2' = 'target_use')) %>%
   mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
                                                     annual_percapita_nets_distributed),
+
+         # calculate # children protected per year
+         nprotect_child_ITN_linear = n_0_1825 * ITNuse2,
+         nprotect_child_SMC = n_91.25_1825 * SMC,
+         nprotect_child_vax = n_91.25_1825 * RTSScov,
+
+         nprotect_child_annual =  nprotect_child_ITN_linear + nprotect_child_SMC + nprotect_child_vax, # TOTAL
+
+         # calculate cost of interventions
          cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
          cost_ITNmin = population * annual_percapita_nets_distmin * sim_length/365 * ITNcost,  # true net cost MIN
          cost_ITNmax = population * annual_percapita_nets_distmax * sim_length/365 * ITNcost,  # true net cost MAX
@@ -226,7 +235,7 @@ dalyoutput_cost <- dalyoutput_cost %>%
          cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax, # TOTAL
          cost_total_ITNmin = cost_ITNmin + cost_clinical + cost_severe + cost_SMC + cost_vax,
          cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax,
-    # cost just among children
+         # cost just among children
          cost_total_u5 = n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost + # cost ITNs
            ((u5_cases-u5_severe) * treatment * TREATcost)*.77 + # cost clinical
            (u5_severe * treatment * SEVcost)*.77 +  # cost severe
@@ -255,13 +264,15 @@ none <- output %>%
          u5_cases_baseline = u5_cases,
          u5_severe_baseline = u5_severe,
 
+         nprotect_child_annual_baseline = nprotect_child_annual,
+
          cost_total_baseline = cost_total,
          cost_total_ITNmin_baseline = cost_total_ITNmin,
          cost_total_ITNmax_baseline = cost_total_ITNmax,
          cost_total_u5_baseline = cost_total_u5,
          ) %>%
   select(file, ID, daly_baseline, cases_baseline, severe_baseline, deaths_baseline,
-         u5_dalys_baseline, u5_cases_baseline, u5_severe_baseline,
+         u5_dalys_baseline, u5_cases_baseline, u5_severe_baseline, nprotect_child_annual_baseline,
          cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline, cost_total_u5_baseline)
 
 base_IDs <- none$file
@@ -273,7 +284,8 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
          CE_ITNmin = (cost_total_ITNmin - cost_total_ITNmin_baseline) / (daly_baseline - daly),
          CE_ITNmax = (cost_total_ITNmax - cost_total_ITNmax_baseline) / (daly_baseline - daly),
          CE_case = (cost_total - cost_total_baseline) / (cases_baseline - cases),
-         CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases)
+         CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases),
+         CE_nprotect_child_annual = (cost_total/(sim_length/365) - cost_total_baseline/(sim_length/365)) / (nprotect_child_annual - nprotect_child_annual_baseline)
          ) %>% # ICER
   mutate(intervention = case_when(
 
@@ -305,6 +317,7 @@ table(scenarios$intervention_f, scenarios$rank, useNA = 'always')
 # inspect range of scenarios
 table(scenarios$ID)
 summary(scenarios$CE)
+summary(scenarios$CE_nprotect_child_annual)
 test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE) # all negative CE scenarios have resistance except 2
 
 saveRDS(scenarios, './03_output/scenarios.rds')
