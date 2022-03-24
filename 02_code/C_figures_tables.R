@@ -951,6 +951,37 @@ ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=i
 ggsave('./03_output/box_whisker_CE_cases.pdf', width=10, height=5)
 
 
+# plotting with cost per child protected
+# inspect range of CE case values
+hex_codes <- scales::hue_pal()(12)
+
+summary(scenarios$CE_nprotect_child_annual)
+
+scenarios %>% filter(intervention != 'none' & resistance == 0) %>%
+  mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
+  mutate(rank=as.numeric(intervention_f)) %>%
+
+  ggplot(aes(x=rank, y=CE_nprotect_child_annual, fill=intervention_f, color=intervention_f, group=intervention)) +
+  geom_hline(yintercept = 0, lty=2, color='grey') +
+  geom_vline(xintercept = 5.5, lty=2, color='grey') +
+  geom_boxplot(alpha=0.3) +
+  coord_cartesian(ylim=c(-.1, 15), xlim=c(1, 12), clip="off") +
+  labs(x='',
+       y=expression(paste(Delta," cost / ", Delta, " child protected")),
+       fill = 'intervention',
+       color = 'intervention',
+       caption = '') +
+  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-1.5,ymax=-1.5) +
+    annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-1.5,ymax=-1.5) +
+  scale_x_continuous(breaks=c(0)) +
+  theme_classic() +
+  scale_fill_manual(values = hex_codes[c(2:5, 9:12)]) +
+  scale_color_manual(values = hex_codes[c(2:5, 9:12)]) +
+  theme(plot.caption.position = "plot")
+
+ggsave('./03_output/box_whisker_CE_child_protected.pdf', width=10, height=5)
+
+
 # per dose RTS,S cost ----------------------------------------------------------
 # function to find the most common character value in a group
 calculate_mode <- function(x) {
