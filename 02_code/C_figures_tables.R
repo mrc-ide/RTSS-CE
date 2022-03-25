@@ -1519,6 +1519,69 @@ univariateseason('highly seasonal')
 univariateseason('seasonal')
 univariateseason('perennial')
 
+# < faceted by season ----------------------------------------------------------
+colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
+
+# by pfpr
+output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+  group_by(ID) %>% arrange(ID, CE) %>%
+  slice(1L)
+
+A <- ggplot(output) +
+  geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
+  labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(~seasonality) +
+  theme_classic()
+
+# by current ITN usage
+B <- ggplot(output) +
+  geom_bar(aes(x=factor(ITNuse), fill=intervention_f), position="fill", show.legend=F) +
+  labs(x='ITN use', y='Proportion most \ncost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(~seasonality) +
+  theme_classic()
+
+# by insecticide resistance
+C <- ggplot(output) +
+  geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill", show.legend=F) +
+  labs(x='Resistance', y='Proportion most \ncost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  facet_grid(~seasonality) +
+  theme_classic()
+
+# by ITN distribution efficiency
+ITNefficient <- function(var, label) {
+  scenarios %>%
+    filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+    filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+    group_by(ID) %>% arrange(ID, {{var}}) %>%
+    slice(1L) %>% select(intervention_f, seasonality, pfpr, {{var}}) %>%
+    mutate(model=label) %>%
+    rename(CE = {{var}})
+}
+
+output2 <- ITNefficient(CE, 'standard') %>%
+  full_join(ITNefficient(CE_ITNmin, 'less efficient')) %>%
+  full_join(ITNefficient(CE_ITNmax, 'more efficient'))
+
+
+D <- ggplot(output2) +
+  geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient'), labels=c('less', 'standard', 'more')), fill=intervention_f), position="fill") +
+  labs(x='ITN efficiency', y='Proportion most \ncost-effective choice', fill='intervention') +
+  scale_fill_manual(values=colors) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  facet_grid(~seasonality) +
+  theme_classic()
+
+(A + B) / (C + D) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+
+ggsave(paste0('./03_output/univariate_quad_by_season.pdf'), width=12, height=5)
+
+
 
 # ITN usage and countries -----------------------------------------------------
 # https://malariaatlas.org/research-project/the-impact-of-malaria-control-on-plasmodium-falciparum-in-africa-2000-2015/
@@ -1774,16 +1837,27 @@ merge %>% group_by(intervention, resistance) %>%
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
-merge %>% group_by(intervention) %>%
+merge %>% group_by(intervention) %>% filter(resistance==0) %>%
   summarize(dominate = sum(dominate),
+            ndominate = n()-dominate,
             t = n(),
             p_dominate = dominate / t * 100,
+            p_ndominate = ndominate / t*100,
             p_best = 100 - p_dominate,
             ICER_m = median(ICER, na.rm=T),
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
-
+merge %>% group_by(intervention) %>% filter(resistance>0) %>%
+  summarize(dominate = sum(dominate),
+            ndominate = n()-dominate,
+            t = n(),
+            p_dominate = dominate / t * 100,
+            p_ndominate = ndominate / t*100,
+            p_best = 100 - p_dominate,
+            ICER_m = median(ICER, na.rm=T),
+            ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
+            ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
 
 
@@ -1809,8 +1883,10 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
             q25 = quantile(CE, prob=0.25, na.rm=T),
             q75 = quantile(CE, prob=0.75, na.rm=T))
 
-# DHS Nigeria ------------------------------------------------------------------
 
+
+# DHS Nigeria ------------------------------------------------------------------
+ # < map ITN DPT3 --------------------------------------------------------------
 dat_all <- readRDS("./03_output/combined_DHS_data_admin1.rds")
 
 
@@ -1844,6 +1920,108 @@ theme(panel.border = element_blank(),
 A + B + C + plot_layout(nrow=1) + plot_annotation(tag_levels = 'A')
 
 ggsave('./03_output/DHS_DP3_ITN.pdf', width=15, height=5)
+
+
+# < box and whisker ------------------------------------------------------------
+scenarios2 <- readRDS('./03_output/scenarios_admin1.rds')
+
+A <- scenarios2 %>% filter(intervention != 'none') %>%
+  mutate(intervention_f = factor(intervention, levels=c('ITN PBO',"ITN 10% boost",'RTS,S EPI','ITN PBO + RTS,S', 'ITN 10% boost + RTS,S'))) %>%
+  mutate(rank=as.numeric(intervention_f)) %>%
+
+  ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
+  geom_hline(yintercept = 0, lty=2, color='grey') +
+  geom_boxplot(alpha=0.3) +
+  #coord_cartesian(ylim=c(-100, 500), clip="off") +
+  labs(x='',
+       y=expression(paste(Delta," cost / ", Delta, " DALYs")),
+       fill = 'intervention',
+       color = 'intervention') +
+  scale_x_continuous(breaks=c(0)) +
+  theme_classic()
+
+# inspect range of CE case values
+summary(scenarios2$CE_nprotect_child_annual)
+
+B <- scenarios2 %>% filter(intervention != 'none') %>%
+  mutate(intervention_f = factor(intervention, levels=c('ITN PBO',"ITN 10% boost",'RTS,S EPI','ITN PBO + RTS,S', 'ITN 10% boost + RTS,S'))) %>%
+  mutate(rank=as.numeric(intervention_f)) %>%
+
+  ggplot(aes(x=rank, y=CE_nprotect_child_annual, fill=intervention_f, color=intervention_f, group=intervention)) +
+  geom_hline(yintercept = 0, lty=2, color='grey') +
+  geom_boxplot(alpha=0.3) +
+  coord_cartesian(ylim=c(0, 5), clip="off") +
+  labs(x='',
+       y=expression(paste(Delta," cost / ", Delta, " child protected")),
+       fill = 'intervention',
+       color = 'intervention',
+       caption = '') +
+  scale_x_continuous(breaks=c(0)) +
+  theme_classic()
+
+A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/box_whisker_admin1.pdf', width=7, height=3)
+
+
+# < delta dot plot -------------------------------------------------------------
+
+output <- scenarios2 %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
+  filter(intervention!='none') %>%
+  mutate(deltadaly = daly_baseline - daly,
+         deltacost = cost_total_ITNmin - cost_total_ITNmin_baseline,
+         deltachildprotect = nprotect_child_annual - nprotect_child_annual_baseline,
+         cost_daly_averted = (cost_total_ITNmin - cost_total_ITNmin_baseline) / deltadaly)
+
+# All interventions, by baseline ITNuse and seasonality
+output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','ITN 10% boost + RTS,S','ITN PBO + RTS,S')))
+
+RColorBrewer::brewer.pal(12, "Paired")
+# colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
+# ITN 10% boost #1F78B4
+# RTSS EPI #B2DF8A
+# RTSS SV #33A02C
+# SMC #FB9A99
+# ITN 10% boost + RTSS #A6CEE3
+# ITN 10% boost + SMC  #E31A1C
+# RTSS + SMC 'deeppink'
+# ITN 10% boost + RTSS + SMC #6A3D9A
+
+colors <- c('#1F78B4',  '#B2DF8A', '#A6CEE3')
+
+A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
+  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
+  geom_point(aes(color=intervention_f), size=2) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  theme_classic() +
+  scale_color_manual(values = colors) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(title='All strategies',
+       y='change in cost (USD)',
+       x='change in DALYs averted',
+       color='intervention')
+
+# removing dominated strategies
+B <- ggplot(data = output, mapping=aes(x=deltachildprotect, y=deltacost/15)) +
+  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
+  geom_point(aes(color=intervention_f), size=2) +
+  geom_hline(yintercept = 0, lty=2, color="black") +
+  geom_vline(xintercept = 0, lty=2, color="black") +
+  theme_classic() +
+  scale_color_manual(values = colors) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  labs(title='All strategies',
+       y='change in cost (USD)',
+       x='change in n children protected annually',
+       color='intervention')
+
+A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave(paste0('./03_output/impact_cloud_admin1.pdf'), width=7, height=3)
+
+
 
 # ------------------------------------------------------------------------------
 

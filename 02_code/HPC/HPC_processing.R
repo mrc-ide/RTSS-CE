@@ -4,9 +4,10 @@ library(tidyverse)
 
 data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/'
 
+
 # raw data ---------------------------------------------------------------------
 # pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "*.rds", full.names = TRUE)
+files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "test_*", full.names = TRUE)
 dat_list <- lapply(files, function (x) readRDS(x))
 dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
 
@@ -34,7 +35,6 @@ test <- dat %>%
   filter(year %in% c(1,2,3)) %>%
   group_by(seasonality, ITNuse, EIR, pfpr) %>%
   summarize(prev = mean(n_detect_730_3650/n_730_3650))
-
 
 
 # long format by age group -----------------------------------------------------
