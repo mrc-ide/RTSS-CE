@@ -51,12 +51,14 @@ stable <- rbind(s1, s2, s3)
 # loop over malariasimulation runs
 init_EIR <- c(0.01, 0.1, seq(1,9,1), seq(10, 100, by=5), seq(110,300, by=10)) # set EIR values
 ITN <- c('pyr')
-ITNuse <- c(0,0.25,0.50,0.75)
-combo <- crossing(stable, init_EIR, ITN, ITNuse) %>% mutate(name = paste0('EIR', "_", row_number()))
+ITNuse <- c(0,0.25,0.50,0.75, # generic runs
+            0.37) # run for admin1
+combo <- crossing(stable, init_EIR, ITN, ITNuse) %>% mutate(name = paste0('EIR', "_", seas_name, "_", init_EIR, "_", ITNuse))
 
 combo <- combo %>%
          filter(!(seas_name == 'seasonal' & init_EIR > 70)) %>%
-         filter(!(seas_name == 'perennial' & init_EIR > 50))
+         filter(!(seas_name == 'perennial' & init_EIR > 50)) %>%
+         filter(!(ITNuse==0.37 & seas_name != 'perennial')) # admin1 run
 
 
 # Run tasks -------------------------------------------------------------------
@@ -70,7 +72,7 @@ t$status()
 
 
 # Results ----------------------------------------------------------------------
-
+library(tidyverse)
 library(data.table)
 library(fuzzyjoin)
 
@@ -110,7 +112,7 @@ p2 <- p2 %>% as_tibble() %>% select(x,y,PANEL) %>% rename(init_EIR=x, pred=y) %>
   left_join(pnames, by='PANEL')
 
 # Pre-intervention baseline PfPR2-10
-PfPR <- as_tibble_col(c(.10, .20, .40), column_name="pfpr")
+PfPR <- as_tibble_col(c(.10, .20, .40, .49), column_name="pfpr") # generic and for admin1
 
 # match via stat_smooth predictions
 match <- PfPR %>%
