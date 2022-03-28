@@ -32,3 +32,4 @@ combined_DHS_data_admin1.rds
 DHS_nets*.rds
 *DHS_data*
 rdhs.json
+DHS_pass.txt
