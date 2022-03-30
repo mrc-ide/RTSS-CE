@@ -119,7 +119,7 @@ datasets_pr <- dhs_datasets(
 
 # download datsets and variables
 downloads_kr <- get_datasets(datasets_kr$FileName)
-vars_kr <- c("caseid", "v001", "v002", "v003", "midx", "v005", 'b4', "b5",
+vars_kr <- c("caseid", "v001", "v002", "v003", "midx", "v005", 'b4', "b5", 'b16',
              "b8", "v459", "v008", "v190", "h1", "h7", "h9", 'h10', "h22", "h32z")
 questions_kr <- search_variables(datasets_kr$FileName, variables = vars_kr)
 
@@ -138,7 +138,7 @@ extract_bound_kr <-
   full_join(
     extract_kr$NGKR7BFL,
     extract_kr$GHKR72FL,
-    by=c("caseid", "v001", "v002", "v003", "midx", "v005", "b4", "b5", "b8", "v459", "v008", "v190", "h1", "h7", "h9", "h10", "h22", "h32z", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
+    by=c("caseid", "v001", "v002", "v003", "midx", "v005", "b4", "b5", "b8", 'b16', "v459", "v008", "v190", "h1", "h7", "h9", "h10", "h22", "h32z", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
   )
 
 extract_pr <- extract_dhs(questions_pr, add_geo = TRUE)
@@ -146,7 +146,7 @@ extract_bound_pr <-
   full_join(
     extract_pr$NGPR7BFL,
     extract_pr$GHPR72FL,
-    by = c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv103", "hml12", "hc1", "hml32", "hml35", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
+    by = c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv024", "hv025", "hv103", "hml12", "hc1", "hml32", "hml35", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
   )
 
 # save
@@ -159,13 +159,12 @@ extract_bound_pr <- readRDS("./03_output/DHS_nets_dtp3_PR.rds")
 
 
 # first filter to children aged 1 and 2 (and alive) in children's recode, then link person's recode. Then keep those who slept in house last night.
+# link KR and PR datasets by v001 and v002 per: https://dhsprogram.com/data/Merging-datasets.cfm
 dat_start <- extract_bound_kr %>%
-  # filter(b5 == 1, b8 %in% c(1,2)) %>% filtering to ages 1 and 2 for Unwin et al.
-  filter(b5 == 1) %>% # filtering to ages <5 here
-  left_join(extract_bound_pr, by = c("v001" = "hv001", "v002" = "hv002", "v003" = "hvidx",
-                                     "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME",
-                                     "DHSREGNA", "SurveyId")) %>%
-  filter(hv103 == 1, hml12 != 9, v459 != 9) %>%
+  filter(b5 == 1) %>% # filtering to alive children
+  left_join(extract_bound_pr, by = c("v001" = "hv001", "v002" = "hv002", "b16" = "hvidx",
+                                     "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "SurveyId",
+                                     "DHSREGNA")) %>%
   mutate(wt = v005/1e6)
 
 # summarize data by admin1
@@ -349,6 +348,9 @@ dat_start2 <- dat_start %>%
          ACT = case_when(sh212i == 0 ~ 0,
                          sh212i == 1 ~ 1,
                          TRUE ~ NA_real_),
+         treatment= case_when(h32z == 0 ~ 0,
+                              h32z == 1 ~ 1,
+                              TRUE ~ NA_real_),
          wealth = case_when(v190 == 1 ~ 'poorest',
                             v190 == 2 ~ 'poorer',
                             v190 == 3 ~ 'middle',
@@ -367,22 +369,18 @@ saveRDS(dat_start2, "./03_output/individual_DHS_data.rds")
 # models -----------------------------------------------------------------------
 # choose 1 option for NGA or GHA
 dat_start <- readRDS("./03_output/individual_DHS_data.rds") %>%
-  filter(SurveyId == 'GH2014DHS') %>%
+  filter(SurveyId == 'GH2014DHS') %>% # NG2018DHS
   mutate(travel60 = travel/60) %>%
   filter(!is.na(PfPRbuff))
 
-dat_start <- readRDS("./03_output/individual_DHS_data.rds") %>%
-  filter(SurveyId == 'NG2018DHS' & hv023 %in% c(51,52)) %>% # limit to admin1 Akwa Ibom
-  mutate(travel60 = travel/60)
 
-
-# plot clusters to ensure correct admin1 was selected
+# plot clusters to ensure correct admin1 or country was selected
 ggplot() +
   geom_sf(data = st_as_sf(shp)) +
   geom_sf(data = st_as_sf(dat_start))
 
 # create survey design object
-DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start)
+DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start %>% filter(!is.na(hv023)))
 
 # group data by cluster
 plotd <- dat_start %>% group_by(CLUSTER) %>%
@@ -439,69 +437,48 @@ tidy(m, conf.int = T, conf.level = 0.95, exponentiate = T)
 m <- svyglm(dpt3 ~ factor(v190), DHSdesign, family=binomial("logit"))
 tidy(m, conf.int = T, conf.level = 0.95, exponentiate = T)
 
-dat_start %>% group_by(v190) %>%
-  summarize(n=n(),
-            wealth = unique(wealth),
-            itn_mean = mean(itn, na.rm=T),
-            itn_access_mean = mean(itn_access, na.rm=T),
-            dpt3_mean = mean(dpt3, na.rm=T),
-            vac_y_itn_n_mean = mean(vac_y_itn_n, na.rm=T),
-            PfPR_median = median(PfPRbuff, na.rm=T),
-            PfPR_25 = quantile(PfPRbuff, prob=0.25, na.rm=T),
-            PfPR_75 = quantile(PfPRbuff, prob=0.75, na.rm=T))
 
-m <- svytotal(~interaction(as.factor(hv006), as.factor(hml32)), DHSdesign, na.rm=T)
+# create function for printing out weighted means
+output_admin1 <- function(admin1) {
 
-survmean <- function(var){
-  m <- svymean(as.formula(paste0('~', var)), DHSdesign, na.rm=T, survey.lonely.psu="adjust")
-  m <- as.data.frame(m) %>% rename('SE' = var)
-  rownames_to_column(m, var = 'var')
+  dat <- dat_start %>% filter(!is.na(hv023)) %>% filter(ADM1NAME == admin1)
+
+  DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat)
+
+  survmean_factor <- function(var1, var2){
+
+    m <- svyby(as.formula(paste0('~', var1)), as.formula(paste0('~', var2)), DHSdesign, svymean, na.rm=T, survey.lonely.psu="adjust")
+    m <- as.data.frame(m)
+    rownames(m) <- c()
+    m %>% rename(value = var1, factor = var2) %>% mutate(var = var1)
+
+  }
+
+  t <- map2_dfr(rep(c('itn_access','itn','dpt3','vac_y_itn_n', 'microscopy', 'mRDT', 'ACT', 'travel60', 'treatment'), 3),
+         c(rep('wealth', 9), rep('sex', 9), rep('residence', 9)),
+         survmean_factor) %>% mutate(admin1 = admin1)
+
+  t
+
 }
 
-map_dfr(c('itn_access','itn','dpt3','vac_y_itn_n'), survmean)
-summary(dat_start$PfPRbuff)
+# run function
+vars <- unique(dat_start$ADM1NAME)
+d <- map_dfr(vars, output_admin1)
 
-PfPR2 <- malariaAtlas::getRaster(
-  surface = 'Plasmodium falciparum PR2 - 10 version 2020',
-  year = 2018,
-  shp = shp)
+# copy estimates to clipboard by factor variable
+d %>% select(-se) %>%
+  filter(factor %in% c('urban', 'rural')) %>%
+  pivot_wider(names_from = factor, values_from = value) %>%
+  arrange(var, admin1, rural, urban) %>% write.table("clipboard",sep="\t")
 
+d %>% select(-se) %>%
+  filter(factor %in% c('male', 'female')) %>%
+  pivot_wider(names_from = factor, values_from = value) %>%
+  arrange(var, admin1, male, female) %>% write.table("clipboard",sep="\t")
 
-adminselect <- shp[shp$name_1=='Akwa Ibom',]
+d %>% select(-se) %>%
+  filter(factor %in% c('poorest', 'poorer', 'middle', 'richer', 'richest')) %>%
+  pivot_wider(names_from = factor, values_from = value) %>%
+  arrange(var, admin1) %>% write.table("clipboard",sep="\t")
 
-raster::extract(PfPR2, adminselect, weights=TRUE, fun=mean, na.rm=T)
-
-
-# Ghana by admin1
-survmean <- function(var){
-  m <- svymean(as.formula(paste0('~', var)), DHSdesign, na.rm=T, survey.lonely.psu="adjust")
-  m <- as.data.frame(m) %>% rename('SE' = var)
-  rownames_to_column(m, var = 'var')
-}
-
-survmean_factor <- function(var1, var2){
-  m <- svyby(as.formula(paste0('~', var1)), as.formula(paste0('~', var2)), DHSdesign, svymean, na.rm=T, survey.lonely.psu="adjust")
-  m <- as.data.frame(m)
-  rownames(m) <- c()
-  m %>% rename(value = var1, factor = var2) %>% mutate(var = var1)
-}
-
-survtable_all <- function(var){
-  svytotal(as.formula(paste0('~', var)), DHSdesign, na.rm=T, survey.lonely.psu="adjust") %>% write.table("clipboard",sep="\t")
-}
-
-survtable <- function(var){
-  svyby(as.formula(paste0('~', var)),~malaria, DHSdesign, svytotal, na.rm=T, survey.lonely.psu="adjust") %>% write.table("clipboard",sep="\t")
-}
-
-
-map_dfr(c('itn_access','itn','dpt3','vac_y_itn_n'), survmean)
-map2_dfr(rep(c('itn_access','itn','dpt3','vac_y_itn_n', 'microscopy', 'mRDT', 'ACT', 'travel60'), 2),
-         c(rep('wealth', 8), rep('sex', 8)),
-         survmean_factor)
-
-survmean_factor('itn_access')
-
-
-# create survey design object
-DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start)
