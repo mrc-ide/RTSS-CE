@@ -482,3 +482,20 @@ d %>% select(-se) %>%
   pivot_wider(names_from = factor, values_from = value) %>%
   arrange(var, admin1) %>% write.table("clipboard",sep="\t")
 
+
+# find correlation between ITN use and DPT3 vaccination
+dat <- dat_start %>% filter(!is.na(hv023)) %>% filter(ADM1NAME == 'Eastern')
+
+# unweighted
+cor(dat$itn, dat$dpt3, method = 'pearson', use = 'complete.obs')
+
+# weighted
+DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt,
+                               data = dat %>%
+                                 filter(!is.na(itn) & !is.na(dpt3) & residence == 'rural'))
+jtools::svycor(~dpt3 + itn, design = DHSdesign)
+
+DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt,
+                               data = dat %>%
+                                 filter(!is.na(itn) & !is.na(dpt3) & residence == 'urban'))
+jtools::svycor(~dpt3 + itn, design = DHSdesign)

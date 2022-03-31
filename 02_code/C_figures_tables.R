@@ -1885,9 +1885,9 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
 
 
 
-# DHS Nigeria ------------------------------------------------------------------
+# DHS admin1 -------------------------------------------------------------------
  # < map ITN DPT3 --------------------------------------------------------------
-dat_all <- readRDS("./03_output/combined_DHS_data_admin1.rds")
+dat_all <- readRDS("./03_output/combined_DHS_data_admin1.rds") %>% filter(countrycode == "GH")
 
 
 A <- ggplot(dat_all) +
@@ -1923,105 +1923,126 @@ ggsave('./03_output/DHS_DP3_ITN.pdf', width=15, height=5)
 
 
 # < box and whisker ------------------------------------------------------------
-scenarios2 <- readRDS('./03_output/scenarios_admin1.rds')
+scenarios2 <- readRDS('./03_output/scenarios2_admin1.rds')
 
-A <- scenarios2 %>% filter(intervention != 'none') %>%
-  mutate(intervention_f = factor(intervention, levels=c('ITN PBO',"ITN 10% boost",'RTS,S EPI','ITN PBO + RTS,S', 'ITN 10% boost + RTS,S'))) %>%
-  mutate(rank=as.numeric(intervention_f)) %>%
+plot_pointrange <- function(y, ymin, ymax, var) {
 
-  ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
-  geom_hline(yintercept = 0, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3) +
-  #coord_cartesian(ylim=c(-100, 500), clip="off") +
+  y <- sym(y)
+  ymin <- sym(ymin)
+  ymax <- sym(ymax)
+
+  scenarios2 %>%
+    ggplot(aes(color=scenario_f, group=scenario_f)) +
+    geom_pointrange(aes(x=scenario, y=!!y, ymin=!!ymin, ymax=!!ymax), alpha=0.7) +
+    geom_hline(yintercept = 0, lty=2, color='grey') +
+    scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+    scale_x_continuous(limits=c(0.5,4.4), breaks=c(1,2,3,4)) +
+    labs(x='',
+         y=expr(paste(Delta," cost / ", Delta, !!var)),
+         fill = '',
+         color = '') +
+    theme_classic()
+}
+
+lacroix_palettes$Pamplemousse
+
+A <- plot_pointrange('CE_daly', 'CE_daly_lower', 'CE_daly_upper', " DALYs")
+B <- plot_pointrange('CE_case', 'CE_case_lower', 'CE_case_upper', " cases")
+C <- plot_pointrange('CE_death', 'CE_death_lower', 'CE_death_upper', " deaths")
+D <- plot_pointrange('CE_daly_u5', 'CE_daly_u5_lower', 'CE_daly_u5_upper', " u5 DALYs")
+E <- plot_pointrange('CE_u5_case', 'CE_u5_case_lower', 'CE_u5_case_upper', " u5 cases")
+F <- plot_pointrange('CE_u5_death', 'CE_u5_death_lower', 'CE_u5_death_upper', " u5 deaths")
+
+(A + B + C) / (D + E + F) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/box_whisker_admin1.pdf', width=8, height=4)
+
+
+# < incidence plot -------------------------------------------------------------
+scenarios <- readRDS('./03_output/scenarios_admin1.rds')
+
+scenario0 <- scenarios %>%
+  filter(ITNboost==0 & RTSS=='none') %>% mutate(scenario=1)
+
+scenario1 <- scenarios %>%
+  filter(ITNboost==1) %>% mutate(scenario=2)
+
+scenario2 <- scenarios %>%
+  filter(RTSS=='EPI') %>% mutate(scenario=3)
+
+scenario3 <- scenarios %>%
+  filter((pfpr==0.40 & ITNboost==1) | (pfpr==0.18 & ITNboost==0 & RTSS=='none')) %>%
+  mutate(scenario=4)
+
+scenario4 <- scenarios %>%
+  filter((pfpr==0.40 & RTSS=='EPI') | (pfpr==0.18 & ITNboost==0 & RTSS=='none')) %>%
+  mutate(scenario=5)
+
+scenarios <- full_join(scenario0, scenario1) %>%
+  full_join(scenario2) %>%
+  full_join(scenario3) %>%
+  full_join(scenario4) %>%
+  mutate(scenario_f = factor(scenario, levels=c(1,2,3,4,5),
+                             labels=c('baseline','mass ITN boost', 'mass age-based RTS,S', 'targeted ITN boost', 'targeted age-based RTS,S'))) %>%
+  mutate(
+          clin_inc = cases / n,
+          clin_inc_lower = cases_lower / n,
+          clin_inc_upper = cases_upper / n,
+
+          clin_inc_u5 = u5_cases / n_0_1825,
+          clin_inc_u5_lower = u5_cases_lower / n_0_1825,
+          clin_inc_u5_upper = u5_cases_upper / n_0_1825,
+
+          sev_inc = severe_cases / n,
+          sev_inc_u5 = u5_severe / n_0_1825)
+
+
+scenarios %>%
+  ggplot(aes(color=factor(pfpr), group=scenario_f)) +
+  geom_pointrange(aes(x=scenario, y=clin_inc, ymin=clin_inc_lower, ymax=clin_inc_upper), alpha=0.7) +
+  scale_color_manual(values = c("#EA7580","#1BB6AF")) +
+  facet_grid(~scenario_f) +
   labs(x='',
-       y=expression(paste(Delta," cost / ", Delta, " DALYs")),
-       fill = 'intervention',
-       color = 'intervention') +
-  scale_x_continuous(breaks=c(0)) +
+       y=expr(paste(Delta," cost / ", Delta, !!var)),
+       fill = '',
+       color = '') +
   theme_classic()
 
-# inspect range of CE case values
-summary(scenarios2$CE_nprotect_child_annual)
-
-B <- scenarios2 %>% filter(intervention != 'none') %>%
-  mutate(intervention_f = factor(intervention, levels=c('ITN PBO',"ITN 10% boost",'RTS,S EPI','ITN PBO + RTS,S', 'ITN 10% boost + RTS,S'))) %>%
-  mutate(rank=as.numeric(intervention_f)) %>%
-
-  ggplot(aes(x=rank, y=CE_nprotect_child_annual, fill=intervention_f, color=intervention_f, group=intervention)) +
-  geom_hline(yintercept = 0, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3) +
-  coord_cartesian(ylim=c(0, 5), clip="off") +
-  labs(x='',
-       y=expression(paste(Delta," cost / ", Delta, " child protected")),
-       fill = 'intervention',
-       color = 'intervention',
-       caption = '') +
-  scale_x_continuous(breaks=c(0)) +
-  theme_classic()
-
-A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
-
-ggsave('./03_output/box_whisker_admin1.pdf', width=7, height=3)
 
 
-# < delta dot plot -------------------------------------------------------------
 
-output <- scenarios2 %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
-  filter(intervention!='none') %>%
-  mutate(deltadaly = daly_baseline - daly,
-         deltacost = cost_total_ITNmin - cost_total_ITNmin_baseline,
-         deltachildprotect = nprotect_child_annual - nprotect_child_annual_baseline,
-         cost_daly_averted = (cost_total_ITNmin - cost_total_ITNmin_baseline) / deltadaly)
+# < CE table -------------------------------------------------------------------
+# continue using scenarios dataset from above
+scenarios %>%
+  mutate(name = paste0(pfpr,'_',scenario)) %>%
+  dplyr::select(name, clin_inc, clin_inc_u5,
+    sev_inc, sev_inc_u5) %>%
+  pivot_longer(cols = clin_inc:sev_inc_u5, names_to = 'var', values_to = 'value') %>%
+  pivot_wider(names_from = name, values_from = value) %>%
+  write.table("clipboard",sep="\t")
 
-# All interventions, by baseline ITNuse and seasonality
-output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','ITN 10% boost + RTS,S','ITN PBO + RTS,S')))
+scenarios %>%
+  mutate(name = paste0(pfpr,'_',scenario)) %>%
+  dplyr::select(name, cost_total) %>%
+  pivot_wider(names_from = name, values_from = cost_total) %>%
+  write.table("clipboard",sep="\t")
 
-RColorBrewer::brewer.pal(12, "Paired")
-# colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
-# ITN 10% boost #1F78B4
-# RTSS EPI #B2DF8A
-# RTSS SV #33A02C
-# SMC #FB9A99
-# ITN 10% boost + RTSS #A6CEE3
-# ITN 10% boost + SMC  #E31A1C
-# RTSS + SMC 'deeppink'
-# ITN 10% boost + RTSS + SMC #6A3D9A
+output <- scenarios %>% dplyr::select(pfpr, scenario, cost_total, clin_inc, clin_inc_u5,
+                                      sev_inc, sev_inc_u5)
 
-colors <- c('#1F78B4',  '#B2DF8A', '#A6CEE3')
+none <- output %>% filter(scenario==1) %>%
+  rename(cost_total_baseline = cost_total,
+         clin_inc_baseline = clin_inc,
+         clin_inc_u5_baseline = clin_inc_u5,
+         sev_inc_baseline = sev_inc,
+         sev_inc_u5_baseline = sev_inc_u5)
 
-A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
-  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
-  geom_point(aes(color=intervention_f), size=2) +
-  geom_hline(yintercept = 0, lty=2, color="black") +
-  geom_vline(xintercept = 0, lty=2, color="black") +
-  theme_classic() +
-  scale_color_manual(values = colors) +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  labs(title='All strategies',
-       y='change in cost (USD)',
-       x='change in DALYs averted',
-       color='intervention')
-
-# removing dominated strategies
-B <- ggplot(data = output, mapping=aes(x=deltachildprotect, y=deltacost/15)) +
-  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
-  geom_point(aes(color=intervention_f), size=2) +
-  geom_hline(yintercept = 0, lty=2, color="black") +
-  geom_vline(xintercept = 0, lty=2, color="black") +
-  theme_classic() +
-  scale_color_manual(values = colors) +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  labs(title='All strategies',
-       y='change in cost (USD)',
-       x='change in n children protected annually',
-       color='intervention')
-
-A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
-
-ggsave(paste0('./03_output/impact_cloud_admin1.pdf'), width=7, height=3)
-
-
+output2 <- output %>% filter(scenario!=1) %>%
+  full_join(none %>% dplyr::select(-scenario)) %>%
+  mutate(CE_clin_inc = (cost_total - cost_total_baseline) / (clin_inc_baseline - clin_inc) / 100000,
+         CE_clin_inc_u5 = (cost_total - cost_total_baseline) / (clin_inc_u5_baseline - clin_inc_u5) / 100000,
+         CE_sev_inc = (cost_total - cost_total_baseline) / (sev_inc_baseline - sev_inc) / 100000,
+         CE_sev_inc_u5 = (cost_total - cost_total_baseline) / (sev_inc_u5_baseline - sev_inc_u5) / 100000)
 
 # ------------------------------------------------------------------------------
 

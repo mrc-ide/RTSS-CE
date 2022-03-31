@@ -21,7 +21,7 @@ share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/ho
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
-                                  cluster = "fi--didemrchnb",
+                                  cluster = "fi--dideclusthn", # fi--dideclusthn OR fi--didemrchnb
                                   parallel = FALSE)
 
 # obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
@@ -32,7 +32,7 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 library(tidyverse)
 year <- 365
 population <- 200000
-pfpr <- c(0.49)
+pfpr <- c(0.40, 0.18)
 
 seas_name <- 'perennial'
 seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
@@ -46,15 +46,15 @@ warmup <- 6*year
 sim_length <- 15*year
 
 # interventions
-ITN <- c('pyr', 'pbo')
-ITNuse <- c(0.37)
+ITN <- c('pyr')
+ITNuse <- c(0.60, 0.39)
 ITNboost <- c(0,1)
-resistance <- c(0, 0.4, 0.8)
+resistance <- c(0)
 IRS <-  c(0)
-treatment <- c(0.45)
+treatment <- c(0.43, 0.60)
 SMC <- c(0)
 RTSS <- c("none", "EPI")
-RTSScov <- c(0, 0.67)
+RTSScov <- c(0, 0.77, 0.72)
 fifth <- c(0)
 
 interventions <-
@@ -66,15 +66,12 @@ name <- "admin1"
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
   mutate(name = paste0(name, "_", row_number())) %>%
   filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set RTSS coverage when there is no RTSS
-  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) %>% # cannot set 0% coverage if RTSS is implemented
-  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) %>% # no administration of fifth doses with EPI or no RTSS
-  filter(!(seas_name == "perennial" & (RTSS == 'SV' | RTSS == "hybrid"))) %>% # do not introduce seasonal vaccination in perennial settings
-  filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
-  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always introduce SMC in highly seasonal settings
-  filter(!(ITNuse == 0 & resistance != 0)) %>% # do not introduce resistance when ITNuse==0
-  filter(!(ITN == 'pbo' & resistance == 0)) %>% # only introduce PBO in areas that have resistance
-  filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # cannot have ITN boost + ITN PBO
-  filter(!(ITN == 'pbo' & ITNuse == 0)) # cannot switch to PBO when ITNuse==0
+  filter(!(RTSScov == 0 & RTSS == "EPI")) %>% # cannot set 0% coverage if RTSS is implemented
+  filter(!(RTSScov > 0 & ITNboost == 1)) %>%
+  filter(!(ITNuse == 0.60 & pfpr != 0.40) & !(ITNuse == 0.39 & pfpr != 0.18)) %>%
+  filter(!(ITNuse == 0.60 & treatment != 0.43) & !(ITNuse == 0.39 & treatment != 0.60)) %>%
+  filter(!(ITNuse == 0.60 & RTSScov == 0.72) & !(ITNuse == 0.39 & RTSScov ==0.77))
+
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC/EIRestimates.rds")
@@ -113,6 +110,29 @@ t$status()
 
 beepr::beep(1)
 
+# -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+# test run by hand
+# x <- 4
+# test <- runsimGF(population = combo[[x,1]],
+#                  seasonality = combo[[x,2]],
+#                  seas_name = combo[[x,3]],
+#                  starting_EIR = combo[[x,4]],
+#                  pfpr = combo[[x,5]],
+#                  warmup = combo[[x,6]],
+#                  sim_length = combo[[x,7]],
+#                  speciesprop = combo[[x,8]],
+#                  ITN = combo[[x,9]],
+#                  ITNuse = combo[[x,10]],
+#                  ITNboost = combo[[x,11]],
+#                  resistance = combo[[x,12]],
+#                  IRS = combo[[x,13]],
+#                  treatment = combo[[x,14]],
+#                  SMC = combo[[x,15]],
+#                  RTSS = combo[[x,16]],
+#                  RTSScov = combo[[x,17]],
+#                  fifth = combo[[x,18]],
+#                  name = combo[[x,19]])
+# -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 
 # DHS processing ---------------------------------------------------------------
 
