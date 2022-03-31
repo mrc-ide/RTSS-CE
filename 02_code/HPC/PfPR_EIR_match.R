@@ -20,7 +20,7 @@ share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/ho
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
-                                  cluster = "fi--didemrchnb",
+                                  cluster = "fi--dideclusthn", # fi--dideclusthn OR fi--didemrchnb
                                   parallel = FALSE)
 
 obj <- didehpc::queue_didehpc(ctx, config = config) # check for latest v. of packages
@@ -52,13 +52,13 @@ stable <- rbind(s1, s2, s3)
 init_EIR <- c(0.01, 0.1, seq(1,9,1), seq(10, 100, by=5), seq(110,300, by=10)) # set EIR values
 ITN <- c('pyr')
 ITNuse <- c(0,0.25,0.50,0.75, # generic runs
-            0.37) # run for admin1
+            0.60,0.39) # runs for admin1
 combo <- crossing(stable, init_EIR, ITN, ITNuse) %>% mutate(name = paste0('EIR', "_", seas_name, "_", init_EIR, "_", ITNuse))
 
 combo <- combo %>%
          filter(!(seas_name == 'seasonal' & init_EIR > 70)) %>%
          filter(!(seas_name == 'perennial' & init_EIR > 50)) %>%
-         filter(!(ITNuse==0.37 & seas_name != 'perennial')) # admin1 run
+         filter(!(ITNuse %in% c(0.60, 0.39) & seas_name != 'perennial')) # admin1 runs
 
 
 # Run tasks -------------------------------------------------------------------
@@ -112,7 +112,7 @@ p2 <- p2 %>% as_tibble() %>% select(x,y,PANEL) %>% rename(init_EIR=x, pred=y) %>
   left_join(pnames, by='PANEL')
 
 # Pre-intervention baseline PfPR2-10
-PfPR <- as_tibble_col(c(.10, .20, .40, .49), column_name="pfpr") # generic and for admin1
+PfPR <- as_tibble_col(c(.10, .20, .40, .18), column_name="pfpr") # generic and for admin1
 
 # match via stat_smooth predictions
 match <- PfPR %>%

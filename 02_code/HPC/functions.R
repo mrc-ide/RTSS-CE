@@ -322,6 +322,17 @@ runsimGF <- function(population,        # simulation population
 
   }
 
+  # correlate interventions  ----------
+  correlations <- get_correlation_parameters(params)
+
+  if (RTSScov == 0.77 & pfpr == 0.40) {
+    correlations$inter_intervention_rho('rtss', 'bednets', 0.04)
+  }
+
+  if (RTSScov == 0.72 & pfpr == 0.18) {
+    correlations$inter_intervention_rho('rtss', 'bednets', 0.07)
+  }
+
   # EIR equilibrium ----------
   params <- set_equilibrium(params, as.numeric(starting_EIR))
 
@@ -331,7 +342,8 @@ runsimGF <- function(population,        # simulation population
   output <- run_simulation(
     timesteps = warmup + sim_length,
     parameters = params,
-    correlations = NULL) %>%
+    correlations = correlations) %>%
+
     # add vars to output
     mutate(EIR = starting_EIR,
            warmup = warmup,
