@@ -103,8 +103,11 @@ set_rdhs_config(email = "h.topazian@imperial.ac.uk",
 # select option 2 to not allow rdhs to store outside of temp directory
 
 # select country and year
-survs <- dhs_surveys(countryIds = c("NG","GH"), # c("GH","KE", "MW", "NG", "TZ", "CD"),
-                     surveyYear = c(2018, 2014))
+survs <- dhs_surveys(surveyCharacteristicIds = 39, # maalria parasitemia
+                     surveyType = c('DHS'),
+                     surveyYear = seq(2000,2020,1))
+                     # countryIds = c("NG","GH"), # c("GH","KE", "MW", "NG", "TZ", "CD"),
+                     # surveyYear = c(2018, 2014))
 
 # select children's recode and individual recode
 datasets_kr <- dhs_datasets(
