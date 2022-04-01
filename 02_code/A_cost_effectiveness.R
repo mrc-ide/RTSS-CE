@@ -495,8 +495,11 @@ convert_usage_to_annual_nets_distributed(
 
 dist_rural <-        ndist_admin1(c(0.60,0.64), (60/90)) # rural baseline
 dist_urban <-        ndist_admin1(c(0.39,0.44), (39/84)) # urban baseline
-dist_rural_usemax <- ndist_admin1(c(0.60,0.70), (60/90)*1.1) # rural boosted 10% & use boosted 10%
-dist_urban_usemax <- ndist_admin1(c(0.39,0.49), (39/84)*1.1) # urban boosted 10% & use boosted 10%
+# dist_rural_usemax <- ndist_admin1(c(0.60,0.70), (60/90)*1.1) # rural boosted 10% & use boosted 10%
+# dist_urban_usemax <- ndist_admin1(c(0.39,0.49), (39/84)*1.1) # urban boosted 10% & use boosted 10%
+dist_rural_usemax <- ndist_admin1(c(0.60,0.70), median(nets_data$use_rate_by_country$use_rate)) # rural boosted 10% & use median SSA
+dist_urban_usemax <- ndist_admin1(c(0.39,0.49), median(nets_data$use_rate_by_country$use_rate)) # urban boosted 10% & use median SSA
+
 
 nets_distributed_baseline <- full_join(dist_rural, dist_urban) %>%
   rename(dist_base = annual_percapita_nets_distributed) %>%

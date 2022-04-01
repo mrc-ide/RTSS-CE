@@ -1922,7 +1922,7 @@ A + B + C + plot_layout(nrow=1) + plot_annotation(tag_levels = 'A')
 ggsave('./03_output/DHS_DP3_ITN.pdf', width=15, height=5)
 
 
-# < box and whisker ------------------------------------------------------------
+# < point range outcomes -------------------------------------------------------
 scenarios2 <- readRDS('./03_output/scenarios2_admin1.rds')
 
 plot_pointrange <- function(y, ymin, ymax, var) {
@@ -1955,7 +1955,7 @@ F <- plot_pointrange('CE_u5_death', 'CE_u5_death_lower', 'CE_u5_death_upper', " 
 
 (A + B + C) / (D + E + F) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-ggsave('./03_output/box_whisker_admin1.pdf', width=8, height=4)
+ggsave('./03_output/pointrange_admin1.pdf', width=8, height=4)
 
 
 # < incidence plot -------------------------------------------------------------
@@ -1994,25 +1994,89 @@ scenarios <- full_join(scenario0, scenario1) %>%
           clin_inc_u5_upper = u5_cases_upper / n_0_1825,
 
           sev_inc = severe_cases / n,
-          sev_inc_u5 = u5_severe / n_0_1825)
+          sev_inc_u5 = u5_severe / n_0_1825) %>%
+  mutate(residence = ifelse(pfpr==0.40, 'rural', 'urban')) %>%
+  dplyr::select(scenario, residence, cost_total, clin_inc:sev_inc_u5) %>%
+  pivot_longer(cols = clin_inc:sev_inc_u5, names_to = 'var', values_to = 'value') %>%
+  mutate(estimate = ifelse(!(grepl('_lower',var) | grepl('_upper',var)), value, NA),
+         lower = ifelse(grepl('_lower',var), value, NA),
+         upper = ifelse(grepl('_upper',var), value, NA),
+         var = case_when(grepl('clin_inc_u5',var) ~ 'clinical incidence <5s',
+                         grepl('clin_inc',var) ~ 'clinical incidence total',
+                         grepl('sev_inc_u5',var) ~ 'severe incidence <5s',
+                         grepl('sev_inc',var) ~ 'severe incidence total')) %>%
+  dplyr::select(-value) %>%
+  group_by(scenario, residence, var) %>%
+  summarize(estimate = mean(estimate, na.rm=T),
+         lower = mean(lower, na.rm=T),
+         upper = mean(upper, na.rm=T),
+         cost_total = mean(cost_total))
 
+
+lacroix_palettes$Pamplemousse
 
 scenarios %>%
-  ggplot(aes(color=factor(pfpr), group=scenario_f)) +
-  geom_pointrange(aes(x=scenario, y=clin_inc, ymin=clin_inc_lower, ymax=clin_inc_upper), alpha=0.7) +
-  scale_color_manual(values = c("#EA7580","#1BB6AF")) +
-  facet_grid(~scenario_f) +
+  ggplot(aes(color=residence)) +
+  geom_vline(aes(xintercept=0), lty=2, color='darkgrey', size=.8) +
+  geom_pointrange(aes(y=(scenario)*-1, x=estimate, xmin=lower, xmax=upper), alpha=0.7,
+                  position = position_dodge(width = .2)) +
+  scale_color_manual(values = c("#088BBE","#172869")) +
+  facet_grid(.~var, scales = 'free_x') +
+  scale_x_continuous(limits = c(0, max(scenarios$upper)), breaks = scales::trans_breaks(identity, identity, n = 3)) +
+  scale_y_continuous(breaks = seq(-5,-1,1),
+                     labels = c('targeted RTS,S', 'targeted ITNs', 'universal RTS,S', 'universal ITNs', 'baseline')) +
   labs(x='',
-       y=expr(paste(Delta," cost / ", Delta, !!var)),
+       y='clinical incidence (per person) or \nsevere incidence (per 1,000 people)',
        fill = '',
        color = '') +
-  theme_classic()
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = "grey96"))
 
+ggsave('./03_output/inc_outcomes_admin1.pdf', width=12, height=3)
 
+# < equality measures ----------------------------------------------------------
+# https://en.wikipedia.org/wiki/Gini_coefficient#Generalized_inequality_indices
+scenarios %>% group_by(scenario, var) %>%
+  mutate(xbar = mean(estimate)) %>%
+  ungroup() %>%
+  mutate(r = estimate / xbar) %>%
+  mutate(rp = r*(cost_total/1000000)) %>%
+  group_by(scenario, var) %>%
+  summarize(inequality = sum(rp),
+            r_diff = r-lead(r)) %>%
+  arrange(var, scenario) %>%
 
 
 # < CE table -------------------------------------------------------------------
-# continue using scenarios dataset from above
+# dalys / cases / deaths
+scenarios2 <- readRDS('./03_output/scenarios2_admin1.rds')
+
+scenarios2 %>%
+  dplyr::select(scenario, scenario_f, CE_daly, CE_case, CE_death, CE_daly_u5, CE_u5_case, CE_u5_death) %>%
+  write.table("clipboard",sep="\t")
+
+
+# equity
+# continue using scenarios datasets from above
+scenarios <- full_join(scenario0, scenario1) %>%
+  full_join(scenario2) %>%
+  full_join(scenario3) %>%
+  full_join(scenario4) %>%
+  mutate(scenario_f = factor(scenario, levels=c(1,2,3,4,5),
+                             labels=c('baseline','mass ITN boost', 'mass age-based RTS,S', 'targeted ITN boost', 'targeted age-based RTS,S'))) %>%
+  mutate(
+    clin_inc = cases / n,
+    clin_inc_lower = cases_lower / n,
+    clin_inc_upper = cases_upper / n,
+
+    clin_inc_u5 = u5_cases / n_0_1825,
+    clin_inc_u5_lower = u5_cases_lower / n_0_1825,
+    clin_inc_u5_upper = u5_cases_upper / n_0_1825,
+
+    sev_inc = severe_cases / n,
+    sev_inc_u5 = u5_severe / n_0_1825)
+
 scenarios %>%
   mutate(name = paste0(pfpr,'_',scenario)) %>%
   dplyr::select(name, clin_inc, clin_inc_u5,
