@@ -45,8 +45,6 @@ outcome_uncertainty <- function(x,
   x %>%
     dplyr::mutate(cases_lower = round(pmax(0, stats::qnorm(0.025, .data$cases, .data$cases * cases_cv))),
                   cases_upper = round(stats::qnorm(0.975, .data$cases, .data$cases * cases_cv)),
-                  cases_lower = round(pmax(0, stats::qnorm(0.025, .data$cases, .data$cases * cases_cv))),
-                  cases_upper = round(stats::qnorm(0.975, .data$cases, .data$cases * cases_cv)),
                   deaths_lower = round(pmax(0, stats::qnorm(0.025, .data$deaths, .data$deaths * deaths_cv))),
                   deaths_upper = round(stats::qnorm(0.975, .data$deaths, .data$deaths * deaths_cv)))
 }
@@ -450,6 +448,7 @@ load('./01_data/unit_costs.rda')
 PYRcost <- 3.50        # $2.00 per net and $1.50 delivery cost
 TREATcost <- 1.47      # clinical treatment cost
 SEVcost <- 22.41       # severe treatment cost
+SMCcost <- unit_costs$cost_per_smc_dose_delivered  # 1.44
 cost_per_dose <- c(2.69, 6.52, 12.91)
 delivery_cost <- c(0.96, 1.62, 2.67)
 
@@ -463,6 +462,7 @@ sim_length <- dalyoutput$sim_length[[1]]
 dalyoutput_cost <- dalyoutput %>%
 
   mutate(ITNuse2 = ifelse(ITNboost==1, ITNuse + .10, ITNuse), # account for booster coverage
+         ITNuse2 = round(ITNuse2, 2),
          ITNcost = case_when(ITN=='pyr' ~ PYRcost)) %>%
 
   # count the number of interventions administered and the frequency of ITN dist
@@ -493,13 +493,17 @@ convert_usage_to_annual_nets_distributed(
 
 }
 
+
 dist_rural <-        ndist_admin1(c(0.60,0.64), (60/90)) # rural baseline
 dist_urban <-        ndist_admin1(c(0.39,0.44), (39/84)) # urban baseline
 # dist_rural_usemax <- ndist_admin1(c(0.60,0.70), (60/90)*1.1) # rural boosted 10% & use boosted 10%
 # dist_urban_usemax <- ndist_admin1(c(0.39,0.49), (39/84)*1.1) # urban boosted 10% & use boosted 10%
-dist_rural_usemax <- ndist_admin1(c(0.60,0.70), median(nets_data$use_rate_by_country$use_rate)) # rural boosted 10% & use median SSA
-dist_urban_usemax <- ndist_admin1(c(0.39,0.49), median(nets_data$use_rate_by_country$use_rate)) # urban boosted 10% & use median SSA
 
+unique(dalyoutput$ITNuse)
+
+dist_usemax <- ndist_admin1(c(0.22, 0.36, 0.39, 0.44, 0.58, 0.60,
+                              0.32, 0.46, 0.49, 0.54, 0.68, 0.70),
+                            median(nets_data$use_rate_by_country$use_rate)) # boosted 10% & use median SSA
 
 nets_distributed_baseline <- full_join(dist_rural, dist_urban) %>%
   rename(dist_base = annual_percapita_nets_distributed) %>%
@@ -507,7 +511,7 @@ nets_distributed_baseline <- full_join(dist_rural, dist_urban) %>%
                                 target_use == 0.44 ~ 0.49, # 44 is the max urban can handle
                                 TRUE ~ target_use))
 
-nets_distributed_usemax <- full_join(dist_rural_usemax, dist_urban_usemax) %>%
+nets_distributed_usemax <- dist_usemax %>%
   rename(dist_usemax = annual_percapita_nets_distributed)
 
 nets_distributed <- full_join(nets_distributed_baseline, nets_distributed_usemax)
@@ -524,8 +528,9 @@ dalyoutput_cost <- dalyoutput_cost %>%
          cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
          cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
          cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
+         cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
 
-         cost_total = cost_ITN + cost_clinical + cost_severe + cost_vax)
+         cost_total = cost_ITN + cost_clinical + cost_severe + cost_vax + cost_SMC)
 
 # assign scenarios
 output <- dalyoutput_cost %>%
@@ -619,11 +624,11 @@ scenario2 <- output %>%
   filter(RTSS=='EPI') %>% mutate(scenario=2)
 
 scenario3 <- output %>%
-  filter((pfpr==0.40 & ITNboost==1) | (pfpr==0.18 & ITNboost==0 & RTSS=='none')) %>%
+  filter((pfpr %in% c(0.12, 0.39, 0.40) & ITNboost==1) | (pfpr %in% c(0.07, 0.18) & ITNboost==0 & RTSS=='none') | (pfpr == 0.05 & ITNboost==0 & RTSS=='none' & SMC==0)) %>%
   mutate(scenario=3)
 
 scenario4 <- output %>%
-  filter((pfpr==0.40 & RTSS=='EPI') | (pfpr==0.18 & ITNboost==0 & RTSS=='none')) %>%
+  filter((pfpr %in% c(0.12, 0.39, 0.40) & RTSS=='EPI') | (pfpr %in% c(0.07, 0.18) & ITNboost==0 & RTSS=='none') | (pfpr == 0.05 & ITNboost==0 & RTSS=='none' & SMC==0)) %>%
   mutate(scenario=4)
 
 scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>% full_join(scenario4) %>%
@@ -632,8 +637,8 @@ scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>% full_j
                              labels=c('mass ITN boost', 'mass age-based RTS,S', 'targeted ITN boost', 'targeted age-based RTS,S')))
 
 none <- output %>%
-  filter(ITNboost==0 & ITN=='pyr' & RTSS=='none') %>%
-
+  filter((seasonality %in% c('perennial', 'highly seasonal') & ITNboost==0 & RTSS=='none') |
+           (seasonality == 'seasonal' & ITNboost==0 & RTSS=='none' & SMC==0)) %>%
   mutate(daly_baseline = daly,
          daly_lower_baseline = daly_lower,
          daly_upper_baseline = daly_upper,
@@ -674,7 +679,7 @@ base_IDs <- none$file
 # sum measures and calculate CE by scenario
 scenarios2 <- scenarios %>% filter(!(file %in% base_IDs)) %>%
   left_join(none %>% dplyr::select(-file), by=c('ID')) %>%
-  group_by(scenario, scenario_f) %>%
+  group_by(scenario, scenario_f, seasonality) %>%
   summarize(across(c(cases:u5_dalys_upper,
                      cost_total,
                      daly_baseline:cost_total_baseline), ~sum(.x, na.rm=T))) %>%
