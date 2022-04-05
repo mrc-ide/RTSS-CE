@@ -1923,7 +1923,8 @@ ggsave('./03_output/DHS_DP3_ITN.pdf', width=15, height=5)
 
 
 # < point range outcomes -------------------------------------------------------
-scenarios2 <- readRDS('./03_output/scenarios2_admin1.rds')
+scenarios2 <- readRDS('./03_output/scenarios2_admin1.rds') %>%
+  filter(seasonality == 'highly seasonal')
 
 plot_pointrange <- function(y, ymin, ymax, var) {
 
@@ -1937,6 +1938,7 @@ plot_pointrange <- function(y, ymin, ymax, var) {
     geom_hline(yintercept = 0, lty=2, color='grey') +
     scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
     scale_x_continuous(limits=c(0.5,4.4), breaks=c(1,2,3,4)) +
+    # facet_grid(.~seasonality) +
     labs(x='',
          y=expr(paste(Delta," cost / ", Delta, !!var)),
          fill = '',
@@ -2046,6 +2048,7 @@ scenarios %>% group_by(scenario, var) %>%
   summarize(inequality = sum(rp),
             r_diff = r-lead(r)) %>%
   arrange(var, scenario) %>%
+  filter(!is.na(r_diff))
 
 
 # < CE table -------------------------------------------------------------------

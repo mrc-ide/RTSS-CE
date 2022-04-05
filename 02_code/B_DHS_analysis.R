@@ -103,7 +103,7 @@ set_rdhs_config(email = "h.topazian@imperial.ac.uk",
 # select option 2 to not allow rdhs to store outside of temp directory
 
 # select country and year
-survs <- dhs_surveys(surveyCharacteristicIds = 39, # maalria parasitemia
+survs <- dhs_surveys(surveyCharacteristicIds = 39, # malaria parasitemia
                      surveyType = c('DHS'),
                      surveyYear = seq(2000,2020,1))
                      # countryIds = c("NG","GH"), # c("GH","KE", "MW", "NG", "TZ", "CD"),
@@ -136,21 +136,61 @@ print(questions_kr[1:length(vars_kr), 1:3])
 print(questions_pr[1:length(vars_pr), 1:3])
 
 # extract data
+datasets_kr %>% dplyr::select(CountryName, SurveyYear, FileName)
+
 extract_kr <- extract_dhs(questions_kr, add_geo = TRUE)
 extract_bound_kr <-
   full_join(
-    extract_kr$NGKR7BFL,
-    extract_kr$GHKR72FL,
-    by=c("caseid", "v001", "v002", "v003", "midx", "v005", "b4", "b5", "b8", 'b16', "v459", "v008", "v190", "h1", "h7", "h9", "h10", "h22", "h32z", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
-  )
+    extract_kr$BJKR61FL,
+    extract_kr$BFKR62FL) %>%
+  full_join(extract_kr$BUKR71FL) %>%
+  full_join(extract_kr$CMKR61FL) %>%
+  full_join(extract_kr$TDKR71FL) %>%
+  full_join(extract_kr$CGKR61FL) %>%
+  full_join(extract_kr$CDKR51FL) %>%
+  full_join(extract_kr$CIKR62FL) %>%
+  full_join(extract_kr$GMKR81FL) %>%
+  full_join(extract_kr$GNKR71FL) %>%
+  full_join(extract_kr$KEKR72FL) %>%
+  full_join(extract_kr$MWKR7AFL) %>%
+  full_join(extract_kr$MLKR7AFL) %>%
+  full_join(extract_kr$NIKR61FL) %>%
+  full_join(extract_kr$NGKR7BFL) %>%
+  full_join(extract_kr$RWKR53FL) %>%
+  full_join(extract_kr$SNKR61FL) %>%
+  full_join(extract_kr$TZKR63FL) %>%
+  full_join(extract_kr$TGKR61FL) %>%
+  full_join(extract_kr$UGKR7BFL) %>%
+  full_join(extract_kr$ZMKR71FL)
+  #   by=c("caseid", "v001", "v002", "v003", "midx", "v005", "b4", "b5", "b8", 'b16', "v459", "v008", "v190", "h1", "h7", "h9", "h10", "h22", "h32z", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
+  # )
 
 extract_pr <- extract_dhs(questions_pr, add_geo = TRUE)
 extract_bound_pr <-
   full_join(
-    extract_pr$NGPR7BFL,
-    extract_pr$GHPR72FL,
-    by = c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv024", "hv025", "hv103", "hml12", "hc1", "hml32", "hml35", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
-  )
+    extract_pr$BJPR61FL,
+    extract_pr$BFPR62FL) %>%
+  full_join(extract_pr$BUPR71FL) %>%
+  full_join(extract_pr$CMPR61FL) %>%
+  full_join(extract_pr$TDPR71FL) %>%
+  full_join(extract_pr$CGPR61FL) %>%
+  full_join(extract_pr$CDPR51FL) %>%
+  full_join(extract_pr$CIPR62FL) %>%
+  full_join(extract_pr$GMPR81FL) %>%
+  full_join(extract_pr$GNPR71FL) %>%
+  full_join(extract_pr$KEPR72FL) %>%
+  full_join(extract_pr$MWPR7AFL) %>%
+  full_join(extract_pr$MLPR7AFL) %>%
+  full_join(extract_pr$NIPR61FL) %>%
+  full_join(extract_pr$NGPR7BFL) %>%
+  full_join(extract_pr$RWPR53FL) %>%
+  full_join(extract_pr$SNPR61FL) %>%
+  full_join(extract_pr$TZPR63FL) %>%
+  full_join(extract_pr$TGPR61FL) %>%
+  full_join(extract_pr$UGPR7BFL) %>%
+  full_join(extract_pr$ZMPR71FL)
+  #   by = c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv024", "hv025", "hv103", "hml12", "hc1", "hml32", "hml35", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
+  # )
 
 # save
 saveRDS(extract_bound_kr,  file = "./03_output/DHS_nets_dtp3_KR.rds")
@@ -348,9 +388,9 @@ dat_start2 <- dat_start %>%
          mRDT = case_when(hml35 == 0 ~ 0,
                           hml35 == 1 ~ 1,
                           TRUE ~ NA_real_),
-         ACT = case_when(sh212i == 0 ~ 0,
-                         sh212i == 1 ~ 1,
-                         TRUE ~ NA_real_),
+         # ACT = case_when(sh212i == 0 ~ 0,
+         #                 sh212i == 1 ~ 1,
+         #                 TRUE ~ NA_real_),
          treatment= case_when(h32z == 0 ~ 0,
                               h32z == 1 ~ 1,
                               TRUE ~ NA_real_),
@@ -362,8 +402,8 @@ dat_start2 <- dat_start %>%
          residence = case_when(hv025 ==1 ~ 'urban',
                                hv025 == 2 ~ 'rural'),
          sex = case_when(b4 == 1 ~ 'male',
-                         b4 == 2 ~ 'female')) %>%
-  left_join(dhs_map, by = c('SurveyId', 'CLUSTER'))
+                         b4 == 2 ~ 'female'))
+  # left_join(dhs_map, by = c('SurveyId', 'CLUSTER'))
 
 # save to .rds
 saveRDS(dat_start2, "./03_output/individual_DHS_data.rds")
@@ -444,7 +484,9 @@ tidy(m, conf.int = T, conf.level = 0.95, exponentiate = T)
 # create function for printing out weighted means
 output_admin1 <- function(admin1) {
 
-  dat <- dat_start %>% filter(!is.na(hv023)) %>% filter(ADM1NAME == admin1)
+  dat <- dat_start %>% filter(!is.na(hv023)) %>%
+    # filter(ADM1NAME == admin1)
+    filter(SurveyId == admin1)
 
   DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat)
 
@@ -457,8 +499,10 @@ output_admin1 <- function(admin1) {
 
   }
 
-  t <- map2_dfr(rep(c('itn_access','itn','dpt3','vac_y_itn_n', 'microscopy', 'mRDT', 'ACT', 'travel60', 'treatment'), 3),
-         c(rep('wealth', 9), rep('sex', 9), rep('residence', 9)),
+  t <- map2_dfr(rep(c('itn_access','itn','dpt3','vac_y_itn_n', 'microscopy', 'mRDT',
+                      # 'ACT', 'travel60',
+                      'treatment'), 3),
+         c(rep('wealth', 7), rep('sex', 7), rep('residence', 7)),
          survmean_factor) %>% mutate(admin1 = admin1)
 
   t
@@ -466,8 +510,18 @@ output_admin1 <- function(admin1) {
 }
 
 # run function
-vars <- unique(dat_start$ADM1NAME)
-d <- map_dfr(vars, output_admin1)
+vars <- unique(dat_start$SurveyId)
+d <- map_dfr(vars[c(1:5, 7:16, 18:21)], output_admin1)
+
+test  <- d %>% group_by(factor, var) %>%
+  filter(factor %in% c('urban', 'rural')) %>%
+  filter(!(var == 'microscopy' & value == 0)) %>%
+  summarize(median = median(value),
+            q25 = quantile(value, p=0.25),
+            q75 = quantile(value, p=0.75)) %>%
+  arrange(var, factor)
+
+summary(d$value[d$var=='treatment',])
 
 # copy estimates to clipboard by factor variable
 d %>% select(-se) %>%
