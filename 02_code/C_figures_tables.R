@@ -1664,12 +1664,12 @@ none <- output %>%
                          seasonality=='seasonal' & intervention %in%
                            c('ITN 10% boost + SMC','ITN PBO + SMC') ~ 1)) %>%
   filter(set == 1) %>%
-  select(file, ID, daly, cases, cost_total, u5_dalys, n_0_1825) %>%
+  dplyr::select(file, ID, daly, cases, cost_total, u5_dalys, n_0_1825) %>%
   rename(daly_baseline = daly,
          cases_baseline = cases,
          cost_total_baseline = cost_total,
          u5_daly_baseline = u5_dalys) %>%
-  select(file, ID, daly_baseline, cases_baseline, cost_total_baseline, u5_daly_baseline)
+  dplyr::select(file, ID, daly_baseline, cases_baseline, cost_total_baseline, u5_daly_baseline)
 
 base_IDs <- none$file
 
@@ -1679,8 +1679,8 @@ output2 <- output %>% filter(!(file %in% base_IDs)) %>%
                          seasonality=='seasonal' & intervention %in%
                           c('ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC') ~ 1)) %>%
   filter(set == 1) %>%
-  select(file, ID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys) %>%
-  left_join(none %>% select(-file), by=c('ID')) %>%
+  dplyr::select(file, ID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys) %>%
+  left_join(none %>% dplyr::select(-file), by=c('ID')) %>%
   mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly),
          deltadaly = daly_baseline - daly,
          deltacases = cases_baseline - cases,
@@ -1823,10 +1823,13 @@ final <- output %>%
   filter(dominate==0) %>%
   mutate(ICER = ifelse(is.na(ICER), (deltacost) / (deltadaly), ICER),
          dominate = 0) %>%
-  select(ID, intervention, ICER, dominate)
+  dplyr::select(ID, intervention, ICER, dominate)
 
 merge <- output %>% left_join(final, by=c('ID', 'intervention')) %>% mutate(dominate = ifelse(is.na(dominate),1,dominate)) %>%
   mutate(resistance = ifelse(resistance!=0, 1, 0))
+
+output %>% group_by(intervention) %>% filter(resistance==0) %>%
+  summarize(cost_daly_averted = median(cost_daly_averted))
 
 merge %>% group_by(intervention, resistance) %>%
   summarize(dominate = sum(dominate),

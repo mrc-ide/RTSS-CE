@@ -32,13 +32,25 @@ obj <- didehpc::queue_didehpc(ctx, config = config)
 library(tidyverse)
 year <- 365
 population <- 200000
-pfpr <- c(0.40, 0.18)
+pfpr <- c(0.1, 0.2, 0.4)
 
+# FIRST
+seas_name <- 'highly seasonal'
+seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
+s1 <- crossing(seasonality, seas_name, pfpr)
+
+# SECOND
+seas_name <- 'seasonal'
+seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
+s2 <- crossing(seasonality, seas_name, pfpr)
+
+# THIRD
 seas_name <- 'perennial'
 seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
-s3 <- crossing(seasonality, seas_name, pfpr)
-stable <- rbind(s3)
 
+s3 <- crossing(seasonality, seas_name, pfpr)
+
+stable <- rbind(s1, s2, s3)
 speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
@@ -47,31 +59,29 @@ sim_length <- 15*year
 
 # interventions
 ITN <- c('pyr')
-ITNuse <- c(0.60, 0.39)
+ITNuse <-  c(0.30, 0.50, 0.60)
 ITNboost <- c(0,1)
 resistance <- c(0)
 IRS <-  c(0)
-treatment <- c(0.43, 0.60)
-SMC <- c(0)
+treatment <- c(0.45)
+SMC <- c(0, 0.85)
 RTSS <- c("none", "EPI")
-RTSScov <- c(0, 0.77, 0.72)
+RTSScov <- c(0, 0.5, 0.8)
 fifth <- c(0)
 
 interventions <-
   crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth)
 
-name <- "admin1"
+name <- "casestudy"
 
 # create combination of all runs and remove non-applicable scenarios
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
   mutate(name = paste0(name, "_", row_number())) %>%
   filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set RTSS coverage when there is no RTSS
   filter(!(RTSScov == 0 & RTSS == "EPI")) %>% # cannot set 0% coverage if RTSS is implemented
-  filter(!(RTSScov > 0 & ITNboost == 1)) %>%
-  filter(!(ITNuse == 0.60 & pfpr != 0.40) & !(ITNuse == 0.39 & pfpr != 0.18)) %>%
-  filter(!(ITNuse == 0.60 & treatment != 0.43) & !(ITNuse == 0.39 & treatment != 0.60)) %>%
-  filter(!(ITNuse == 0.60 & RTSScov == 0.72) & !(ITNuse == 0.39 & RTSScov ==0.77))
-
+  filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
+  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always introduce SMC in highly seasonal settings
+  filter(!(seas_name == 'seasonal'))
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC/EIRestimates.rds")
@@ -142,7 +152,7 @@ library(tidyverse)
 data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/'
 
 # pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "admin1_*", full.names = TRUE)
+files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "casestudy_*", full.names = TRUE)
 dat_list <- lapply(files, function (x) readRDS(x))
 dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
 
@@ -163,7 +173,8 @@ dat <- dat %>% rowwise() %>%
 
 # check prevalence - that the EIR used in the simulation results in the matching prevalence value
 test <- dat %>%
-  filter((RTSS=='none' & ITN=='pyr') & SMC==0 | (seasonality=="highly seasonal" & SMC==0.85)) %>%
+  filter((seasonality != 'highly seasonal' & RTSS=='none' & ITN=='pyr' & SMC==0) |
+           (seasonality=="highly seasonal" & RTSS=='none' & ITN=='pyr')) %>%
   filter(year %in% c(1,2,3)) %>%
   group_by(seasonality, ITNuse, EIR, pfpr) %>%
   summarize(prev = mean(n_detect_730_3650/n_730_3650))
@@ -200,4 +211,4 @@ dat3 <- dat2 %>%
   distinct() %>% ungroup()
 
 # save
-saveRDS(dat3, paste0(data.dir, "03_output/rtss_long_admin1.rds"))
+saveRDS(dat3, paste0(data.dir, "03_output/rtss_long_casestudy.rds"))
