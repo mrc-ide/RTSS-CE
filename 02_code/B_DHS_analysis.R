@@ -521,7 +521,7 @@ test  <- d %>% group_by(factor, var) %>%
             q75 = quantile(value, p=0.75)) %>%
   arrange(var, factor)
 
-summary(d$value[d$var=='treatment',])
+summary(d[d$var=='treatment',]$value)
 
 # copy estimates to clipboard by factor variable
 d %>% select(-se) %>%

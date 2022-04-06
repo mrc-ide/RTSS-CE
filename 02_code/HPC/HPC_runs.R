@@ -72,8 +72,8 @@ ITNuse <- c(0,0.25, 0.50, 0.75)
 ITNboost <- c(0,1)
 resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
-treatment <- c(0.45)
-SMC <- c(0,0.85)
+treatment <- c(0.30, 0.45, 0.60)
+SMC <- c(0, 0.85)
 RTSS <- c("none", "EPI", "SV") # leave out hybrid for now
 RTSScov <- c(0, 0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46%; first half of 2021
 fifth <- c(0) # only one booster for now
@@ -81,7 +81,7 @@ fifth <- c(0) # only one booster for now
 interventions <-
   crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth)
 
-name <- "test"
+name <- "general"
 
 # create combination of all runs and remove non-applicable scenarios
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
@@ -130,7 +130,7 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   filter(exist==0) %>%
   select(-f, -exist)
 
-t <- obj$enqueue_bulk(combo, runsimGF) # run 500 at a time [1:500,]
+t <- obj$enqueue_bulk(combo[1:500,], runsimGF) # run 500 at a time [1:500,]
 t$status()
 
 beepr::beep(1)
