@@ -19,7 +19,8 @@ dalyoutput_cost <- readRDS('./03_output/dalyoutput_cost.rds')
 # seasonality 15 years ---------------------------------------------------------
 
 # look at one file
-output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 )%>%
+output <- dat %>% filter(SMC == 0.85 & RTSS == 'SV' & treatment == 0.45 &
+                           ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0) %>%
   filter(seasonality == 'highly seasonal')
 
 # pull out intervention timings
@@ -56,7 +57,11 @@ ggsave('./03_output/seasonality_15yrs.pdf', width=10, height=4)
 
 # seasonality 1 year -----------------------------------------------------------
 # pull out baseline settings with no intervention
-output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') | (seasonality == 'perennial' & RTSS == 'none')) & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0)
+output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') |
+                            (seasonality == 'perennial' & RTSS == 'none')) &
+                           ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 & treatment == 0.45)
+
+table(output$seasonality)
 
 # pull out intervention timings
 SMCtime <- output %>% select(smc_timesteps, seasonality, pfpr) %>%
@@ -83,7 +88,7 @@ ITNtime <- output %>% select(bednet_timesteps, seasonality, pfpr) %>%
   mutate(itn = itn / (365/12) + 1)
 
 none <- dat %>%
-  filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' &
+  filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' & treatment == 0.45,
            resistance == 0 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal')))
 
@@ -113,7 +118,7 @@ ggsave('./03_output/seasonality_1yr.pdf', width=8, height=4)
 
 # check that clinical incidence among children meets the policy recommendation of clinical incidence >= 0.1 in the age-group
 CIcheck <- dat %>%
-  filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr'
+  filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' & treatment == 0.45
          & resistance == 0 & seasonality != 'perennial' &
            (SMC == 0 | (seasonality == 'highly seasonal')) & year == 1)
 
@@ -125,7 +130,7 @@ CIcheck %>% group_by(pfpr, seasonality) %>%
 
 # seasonality 2 years ----------------------------------------------------------
 # pull out baseline settings with no intervention
-output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') | (seasonality == 'perennial' & RTSS == 'none')) & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 & pfpr == 0.4) %>% filter(month <= 12)
+output <- dat %>% filter(((SMC == 0.85 & RTSS == 'SV') | (seasonality == 'perennial' & RTSS == 'none')) & ITN == 'pyr' & ITNuse == 0 & resistance == 0 & ITNboost == 0 & pfpr == 0.4 & treatment == 0.45) %>% filter(month <= 12)
 
 # copy dataset twice for pre- and post-intervention
 output <- rbind(output, output %>% mutate(month = month-13))
@@ -164,7 +169,7 @@ interventions <- rbind(SMCtime, RTSStime, ITNtime)
 
 none <- dat %>%
   filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' &
-           resistance == 0 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
+           resistance == 0 & treatment == 0.45 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
   filter(month <= 12 & pfpr == 0.4)
 
@@ -469,7 +474,7 @@ if(season=='seasonal'){
   }
 
   if(season=='seasonal'){
-    colors <- c('#1F78B4', '#FB9A99', '#A6CEE3', '#E31A1C',  'deeppink', '#6A3D9A')
+    colors <- c('#1F78B4', '#33A02C', '#FB9A99', '#A6CEE3', '#E31A1C',  'deeppink', '#6A3D9A')
   }
 
   # removing dominated strategies
@@ -950,36 +955,6 @@ ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=i
 
 ggsave('./03_output/box_whisker_CE_cases.pdf', width=10, height=5)
 
-
-# plotting with cost per child protected
-# inspect range of CE case values
-hex_codes <- scales::hue_pal()(12)
-
-summary(scenarios$CE_nprotect_child_annual)
-
-scenarios %>% filter(intervention != 'none' & resistance == 0) %>%
-  mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
-  mutate(rank=as.numeric(intervention_f)) %>%
-
-  ggplot(aes(x=rank, y=CE_nprotect_child_annual, fill=intervention_f, color=intervention_f, group=intervention)) +
-  geom_hline(yintercept = 0, lty=2, color='grey') +
-  geom_vline(xintercept = 5.5, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3) +
-  coord_cartesian(ylim=c(-.1, 15), xlim=c(1, 12), clip="off") +
-  labs(x='',
-       y=expression(paste(Delta," cost / ", Delta, " child protected")),
-       fill = 'intervention',
-       color = 'intervention',
-       caption = '') +
-  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-1.5,ymax=-1.5) +
-    annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-1.5,ymax=-1.5) +
-  scale_x_continuous(breaks=c(0)) +
-  theme_classic() +
-  scale_fill_manual(values = hex_codes[c(2:5, 9:12)]) +
-  scale_color_manual(values = hex_codes[c(2:5, 9:12)]) +
-  theme(plot.caption.position = "plot")
-
-ggsave('./03_output/box_whisker_CE_child_protected.pdf', width=10, height=5)
 
 
 # per dose RTS,S cost ----------------------------------------------------------
@@ -1508,9 +1483,16 @@ univariateseason <- function(season) {
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     theme_classic()
 
-  (A + B) / (C + D) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+  E <- ggplot(output) +
+    geom_bar(aes(x=factor(treatment, levels=c('low', 'medium', 'high')), fill=intervention_f), position="fill") +
+    labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+    theme_classic()
 
-   ggsave(paste0('./03_output/univariate_quad_', season, '.pdf'), width=9, height=5)
+  (A + B + C) / (D + E) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+
+   ggsave(paste0('./03_output/univariate_quad_', season, '.pdf'), width=14, height=5)
 
 }
 
@@ -1518,6 +1500,7 @@ univariateseason <- function(season) {
 univariateseason('highly seasonal')
 univariateseason('seasonal')
 univariateseason('perennial')
+
 
 # < faceted by season ----------------------------------------------------------
 colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")

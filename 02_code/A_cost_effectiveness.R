@@ -108,7 +108,7 @@ dalyoutput <- dalyoutput %>%
          u5_severe = ifelse(age %in% c('0-91.25', '91.25-1825'), severe_cases, 0),
          u5_dalys = ifelse(age %in% c('0-91.25', '91.25-1825'), daly, 0)) %>%
 
-  mutate_at(vars(n, n_0_1825, n_91.25_1825, u5_cases, u5_severe, u5_dalys, inc_clinical:daly), sum, na.rm=T) %>%  # condense outputs over all ages in population
+  mutate_at(vars(n, n_0_1825, n_91.25_1825, u5_cases, u5_severe, u5_dalys, inc_clinical:daly_lower), sum, na.rm=T) %>%  # condense outputs over all ages in population
   select(-age, -age_upper, -age_lower) %>%
   distinct()
 
@@ -218,13 +218,6 @@ dalyoutput_cost <- dalyoutput_cost %>%
   mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
                                                     annual_percapita_nets_distributed),
 
-         # calculate # children protected per year
-         nprotect_child_ITN_linear = n_0_1825 * ITNuse2,
-         nprotect_child_SMC = n_91.25_1825 * SMC,
-         nprotect_child_vax = n_91.25_1825 * RTSScov,
-
-         nprotect_child_annual =  nprotect_child_ITN_linear + nprotect_child_SMC + nprotect_child_vax, # TOTAL
-
          # calculate cost of interventions
          cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
          cost_ITNmin = population * annual_percapita_nets_distmin * sim_length/365 * ITNcost,  # true net cost MIN
@@ -249,10 +242,9 @@ saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
 
 # assign scenarios -------------------------------------------------------------
-
 output <- dalyoutput_cost %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
-  mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, sep="_")) # create unique identifier
+  mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, sep="_")) # create unique identifier
 
 # there should be 90 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 2.5 resistance (only pbo in resistance scenarios)
 none <- output %>%
@@ -267,15 +259,13 @@ none <- output %>%
          u5_cases_baseline = u5_cases,
          u5_severe_baseline = u5_severe,
 
-         nprotect_child_annual_baseline = nprotect_child_annual,
-
          cost_total_baseline = cost_total,
          cost_total_ITNmin_baseline = cost_total_ITNmin,
          cost_total_ITNmax_baseline = cost_total_ITNmax,
          cost_total_u5_baseline = cost_total_u5,
          ) %>%
   select(file, ID, daly_baseline, cases_baseline, severe_baseline, deaths_baseline,
-         u5_dalys_baseline, u5_cases_baseline, u5_severe_baseline, nprotect_child_annual_baseline,
+         u5_dalys_baseline, u5_cases_baseline, u5_severe_baseline,
          cost_total_baseline, cost_total_ITNmin_baseline, cost_total_ITNmax_baseline, cost_total_u5_baseline)
 
 base_IDs <- none$file
@@ -287,8 +277,7 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
          CE_ITNmin = (cost_total_ITNmin - cost_total_ITNmin_baseline) / (daly_baseline - daly),
          CE_ITNmax = (cost_total_ITNmax - cost_total_ITNmax_baseline) / (daly_baseline - daly),
          CE_case = (cost_total - cost_total_baseline) / (cases_baseline - cases),
-         CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases),
-         CE_nprotect_child_annual = (cost_total/(sim_length/365) - cost_total_baseline/(sim_length/365)) / (nprotect_child_annual - nprotect_child_annual_baseline)
+         CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases)
          ) %>% # ICER
   mutate(intervention = case_when(
 
@@ -320,18 +309,9 @@ table(scenarios$intervention_f, scenarios$rank, useNA = 'always')
 # inspect range of scenarios
 table(scenarios$ID)
 summary(scenarios$CE)
-summary(scenarios$CE_nprotect_child_annual)
 test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE) # all negative CE scenarios have resistance except 2
 
 saveRDS(scenarios, './03_output/scenarios.rds')
-
-
-# run scenarios
-
-('./03_output/rtss_long.rds',
-         './03_output/dalyoutput.rds',
-         './03_output/dalyoutput_cost.rds',
-         './03_output/scenarios.rds')
 
 
 
@@ -398,7 +378,7 @@ ggplot(dalyoutput_cost) +
 # Case-study -------------------------------------------------------------------
 
 # pull in data from simulation runs (all interventions)
-dalyoutput <- readRDS("./03_output/rtss_long_admin1.rds") %>%
+dalyoutput <- readRDS("./03_output/rtss_long_casestudy.rds") %>%
   separate(col = age, into = c("age_lower", "age_upper"), sep="-", remove = F) %>%
   mutate(age_lower = as.numeric(age_lower)/365,
          age_upper = as.numeric(age_upper)/365,
@@ -476,45 +456,17 @@ dalyoutput_cost <- dalyoutput %>%
   ungroup() %>% rowwise()
 
 # assume maximum observed use rate and median bednet half life (across Africa)
-# read in netz package data to find the annual nets to distribute to give the simulated usage
-nets_data <- netz::prepare_data()
+nets_distributed <- ndist(0.88)
 
-# get nets to be distributed for each ITN usage
-ndist_admin1 <- function(target_usage, use_rate) {
+# assume observed rate is the min in Africa
+nets_distributed_min <- ndist(min(nets_data$use_rate_by_country$use_rate))
+nets_distributed_min <- rename(nets_distributed_min, annual_percapita_nets_distmin = annual_percapita_nets_distributed)
 
-convert_usage_to_annual_nets_distributed(
-  target_usage = target_usage, # use from DHS + 10% for itn boost
-  distribution_freq = 3*365, # every three years
-  use_rate_data = use_rate, # use / access from DHS
-  half_life_data = nets_data$half_life_data[nets_data$half_life_data$iso3=='GHA',]$half_life,
-  extrapolate_npc = "loess",
-  net_loss_function = net_loss_map) %>%
-  select(target_use, annual_percapita_nets_distributed)
+# assume observed rate is the max in Africa
+nets_distributed_max <- ndist(max(nets_data$use_rate_by_country$use_rate))
+nets_distributed_max <- rename(nets_distributed_max, annual_percapita_nets_distmax = annual_percapita_nets_distributed)
 
-}
-
-
-dist_rural <-        ndist_admin1(c(0.60,0.64), (60/90)) # rural baseline
-dist_urban <-        ndist_admin1(c(0.39,0.44), (39/84)) # urban baseline
-# dist_rural_usemax <- ndist_admin1(c(0.60,0.70), (60/90)*1.1) # rural boosted 10% & use boosted 10%
-# dist_urban_usemax <- ndist_admin1(c(0.39,0.49), (39/84)*1.1) # urban boosted 10% & use boosted 10%
-
-unique(dalyoutput$ITNuse)
-
-dist_usemax <- ndist_admin1(c(0.22, 0.36, 0.39, 0.44, 0.58, 0.60,
-                              0.32, 0.46, 0.49, 0.54, 0.68, 0.70),
-                            median(nets_data$use_rate_by_country$use_rate)) # boosted 10% & use median SSA
-
-nets_distributed_baseline <- full_join(dist_rural, dist_urban) %>%
-  rename(dist_base = annual_percapita_nets_distributed) %>%
-  mutate(target_use = case_when(target_use == 0.64 ~ 0.70, # 64% is the max rural can handle
-                                target_use == 0.44 ~ 0.49, # 44 is the max urban can handle
-                                TRUE ~ target_use))
-
-nets_distributed_usemax <- dist_usemax %>%
-  rename(dist_usemax = annual_percapita_nets_distributed)
-
-nets_distributed <- full_join(nets_distributed_baseline, nets_distributed_usemax)
+nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max)
 
 
 # create cost variables
@@ -524,7 +476,7 @@ dalyoutput_cost <- dalyoutput_cost %>%
             by=c('ITNuse2' = 'target_use')) %>%
   mutate(
          # calculate cost of interventions
-         cost_ITN = population * dist_usemax * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
+         cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
          cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
          cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
          cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
@@ -536,99 +488,40 @@ dalyoutput_cost <- dalyoutput_cost %>%
 output <- dalyoutput_cost %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, sep="_")) # create unique identifier
-#
-# # there should be 2 baseline scenarios
-# none <- output %>%
-#   filter(ITNboost==0 & ITN=='pyr' & RTSS=='none') %>%
-#
-#   mutate(daly_baseline = daly,
-#          daly_lower_baseline = daly_lower,
-#          daly_upper_baseline = daly_upper,
-#
-#          cases_baseline = cases,
-#          cases_lower_baseline = cases_lower,
-#          cases_upper_baseline = cases_upper,
-#
-#          severe_baseline = severe_cases,
-#
-#          deaths_baseline = deaths,
-#          deaths_lower_baseline = deaths_lower,
-#          deaths_upper_baseline = deaths_upper,
-#
-#          u5_dalys_baseline = u5_dalys,
-#          u5_dalys_lower_baseline = u5_dalys_lower,
-#          u5_dalys_upper_baseline = u5_dalys_upper,
-#
-#          u5_cases_baseline = u5_cases,
-#          u5_cases_lower_baseline = u5_cases_lower,
-#          u5_cases_upper_baseline = u5_cases_upper,
-#
-#          u5_severe_baseline = u5_severe,
-#
-#          u5_deaths_baseline = u5_deaths,
-#          u5_deaths_lower_baseline = u5_deaths_lower,
-#          u5_deaths_upper_baseline = u5_deaths_upper,
-#
-#          n_0_1825_baseline = n_0_1825,
-#          n_baseline = n,
-#
-#          cost_total_baseline = cost_total
-#   ) %>%
-#   select(file, ID, daly_baseline:cost_total_baseline)
-#
-# base_IDs <- none$file
-#
-# scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
-#   left_join(none %>% select(-file), by=c('ID')) %>%
-#   mutate(CE_daly = (cost_total - cost_total_baseline) / (daly_baseline - daly),
-#          CE_daly_lower = (cost_total - cost_total_baseline) / (daly_lower_baseline - daly_lower),
-#          CE_daly_upper = (cost_total - cost_total_baseline) / (daly_upper_baseline - daly_upper),
-#
-#          CE_daly_u5 = (cost_total - cost_total_baseline) / (u5_dalys_baseline - u5_dalys),
-#          CE_daly_u5_lower = (cost_total - cost_total_baseline) / (u5_dalys_lower_baseline - u5_dalys_lower),
-#          CE_daly_u5_upper = (cost_total - cost_total_baseline) / (u5_dalys_upper_baseline - u5_dalys_upper),
-#
-#          CE_case = (cost_total - cost_total_baseline) / (cases_baseline - cases),
-#          CE_case_lower = (cost_total - cost_total_baseline) / (cases_lower_baseline - cases_lower),
-#          CE_case_upper = (cost_total - cost_total_baseline) / (cases_upper_baseline - cases_upper),
-#
-#          CE_u5_case = (cost_total - cost_total_baseline) / (u5_cases_baseline - u5_cases),
-#          CE_u5_case_lower = (cost_total - cost_total_baseline) / (u5_cases_lower_baseline - u5_cases_lower),
-#          CE_u5_case_upper = (cost_total - cost_total_baseline) / (u5_cases_upper_baseline - u5_cases_upper),
-#
-#          CE_death = (cost_total - cost_total_baseline) / (deaths_baseline - deaths),
-#          CE_death_lower = (cost_total - cost_total_baseline) / (deaths_lower_baseline - deaths_lower),
-#          CE_death_upper = (cost_total - cost_total_baseline) / (deaths_upper_baseline - deaths_upper),
-#
-#          CE_u5_death = (cost_total - cost_total_baseline) / (u5_deaths_baseline - u5_deaths),
-#          CE_u5_death_lower = (cost_total - cost_total_baseline) / (u5_deaths_lower_baseline - u5_deaths_lower),
-#          CE_u5_death_upper = (cost_total - cost_total_baseline) / (u5_deaths_upper_baseline - u5_deaths_upper)
-#   ) %>%
-#
-#   mutate(intervention = case_when(
-#
-#     ITN=='pyr' & ITNboost==0 & RTSS=='none' ~ 'none',
-#     ITN=='pyr' & ITNboost==1 & RTSS=='none' ~ 'ITN 10% boost',
-#     ITN=='pyr' & ITNboost==0 & RTSS=='EPI' ~ 'RTS,S EPI')) %>%
-#
-#   mutate(intervention_f = factor(intervention, levels=c('none', 'ITN 10% boost', 'RTS,S EPI')))
 
-saveRDS(output, './03_output/scenarios_admin1.rds')
+saveRDS(output, './03_output/scenarios_casestudy.rds')
+
 
 # repeat exercise by grouping rural / urban together for analysis
 # categorize grouped scenarios
+
+# gap in PfPR
+output_pfpr <- output %>%
+  filter(pfpr %in% c(0.40, 0.10) & RTSScov %in% c(0, 0.80) & ITNuse == 0.50)
+
+# gap in ITN use
+output_itn <- output %>%
+  filter(RTSScov %in% c(0, 0.80) & ((pfpr == 0.20 & ITNuse == 0.60) | (pfpr == 0.10 & ITNuse == 0.30)))
+
+# gap in RTSS coverage
+output_rtss <- output %>%
+  filter(ITNuse == 0.50 & ((pfpr == 0.20 & RTSScov %in% c(0, 0.50)) | (pfpr == 0.10 & RTSScov %in% c(0, 0.80))))
+
+
+assign_scenarios <- function(output){
+# assign scenarios
 scenario1 <- output %>%
-  filter(ITNboost==1) %>% mutate(scenario=1)
+  filter(ITNboost==1 & RTSS=='none') %>% mutate(scenario=1)
 
 scenario2 <- output %>%
-  filter(RTSS=='EPI') %>% mutate(scenario=2)
+  filter(RTSS=='EPI' & ITNboost==0) %>% mutate(scenario=2)
 
 scenario3 <- output %>%
-  filter((pfpr %in% c(0.12, 0.39, 0.40) & ITNboost==1) | (pfpr %in% c(0.07, 0.18) & ITNboost==0 & RTSS=='none') | (pfpr == 0.05 & ITNboost==0 & RTSS=='none' & SMC==0)) %>%
+  filter((pfpr %in% c(0.20, 0.40) & ITNboost==1 & RTSS=='none') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
   mutate(scenario=3)
 
 scenario4 <- output %>%
-  filter((pfpr %in% c(0.12, 0.39, 0.40) & RTSS=='EPI') | (pfpr %in% c(0.07, 0.18) & ITNboost==0 & RTSS=='none') | (pfpr == 0.05 & ITNboost==0 & RTSS=='none' & SMC==0)) %>%
+  filter((pfpr %in% c(0.20, 0.40) & ITNboost==0 & RTSS=='EPI') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
   mutate(scenario=4)
 
 scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>% full_join(scenario4) %>%
@@ -709,5 +602,17 @@ scenarios2 <- scenarios %>% filter(!(file %in% base_IDs)) %>%
         CE_u5_death_upper = (cost_total - cost_total_baseline) / (u5_deaths_upper_baseline - u5_deaths_upper)
 )
 
-saveRDS(scenarios2, './03_output/scenarios2_admin1.rds')
+}
+
+test1 <- assign_scenarios(output_pfpr) %>% mutate(scenario2 = 1)
+test2 <- assign_scenarios(output_itn) %>% mutate(scenario2 = 2)
+test3 <- assign_scenarios(output_rtss) %>% mutate(scenario2 = 3)
+
+
+scenarios2 <- full_join(test1, test2) %>% full_join(test3) %>%
+  mutate(scenario2_f = factor(scenario2,
+                             levels=c(1,2,3),
+                             labels=c('gap in PfPR', 'gap in ITN use', 'gap in vaccination')))
+
+saveRDS(scenarios2, './03_output/scenarios2_casestudy.rds')
 
