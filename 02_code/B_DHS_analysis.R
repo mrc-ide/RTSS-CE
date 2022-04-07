@@ -1,7 +1,6 @@
 # country case-study -----------------------------------------------------------
 library(rdhs)
 library(malariaAtlas)
-# devtools::install_github("ropensci/rdhs")
 library(raster)
 library(sf)
 library(tidyverse)
@@ -65,21 +64,26 @@ saveRDS(SSA_ITN, './03_output/MAP_ITN.rds')
 
 # TRAVEL TIMES #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-
 # download shapefile and travel times raster from MAP
-shp <- malariaAtlas::getShp(ISO = c("NGA","GHA"), admin_level = "admin1")
-plot(shp)
+shpNGA <- malariaAtlas::getShp(ISO = "NGA", admin_level = "admin1")
+plot(shpNGA)
 
-traveltime <- malariaAtlas::getRaster(
+shpGHA <- malariaAtlas::getShp(ISO = "GHA", admin_level = "admin1")
+plot(shpGHA)
+
+traveltimeNGA <- malariaAtlas::getRaster(
   surface = 'Global travel time to healthcare map with access to motorized transport',
-  shp = shp)
-malariaAtlas::autoplot_MAPraster(traveltime)
+  shp = shpNGA)
+malariaAtlas::autoplot_MAPraster(traveltimeNGA)
+
+traveltimeGHA <- malariaAtlas::getRaster(
+  surface = 'Global travel time to healthcare map with access to motorized transport',
+  shp = shpGHA)
+malariaAtlas::autoplot_MAPraster(traveltimeGHA)
+
 
 
 # PfPR #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-
 # get MAP PfPR for SSA admin1
-shpNGA <- malariaAtlas::getShp(ISO = c("NGA"), admin_level = "admin1")
-
-shpGHA <- malariaAtlas::getShp(ISO = c("GHA"), admin_level = "admin1")
-
 PfPR_NGA <- malariaAtlas::getRaster(
   surface = 'Plasmodium falciparum PR2 - 10 version 2020',
   year = 2018,
@@ -92,22 +96,16 @@ PfPR_GHA <- malariaAtlas::getRaster(
   shp = shpGHA)
 malariaAtlas::autoplot_MAPraster(PfPR_GHA)
 
-PfPR2 <- do.call(merge, list(PfPR_NGA, PfPR_GHA))
-plot(PfPR2)
 
 
 # DHS data ---------------------------------------------------------------------
 set_rdhs_config(email = "h.topazian@imperial.ac.uk",
                 project = "Strategic introduction of the RTS,S/AS01 malaria
                 vaccine relative to scale-up of existing interventions")
-# select option 2 to not allow rdhs to store outside of temp directory
 
 # select country and year
-survs <- dhs_surveys(surveyCharacteristicIds = 39, # malaria parasitemia
-                     surveyType = c('DHS'),
-                     surveyYear = seq(2000,2020,1))
-                     # countryIds = c("NG","GH"), # c("GH","KE", "MW", "NG", "TZ", "CD"),
-                     # surveyYear = c(2018, 2014))
+survs <- dhs_surveys(countryIds = c("NG","GH"), # c("GH","KE", "MW", "NG", "TZ", "CD"),
+                     surveyYear = c(2018, 2014))
 
 # select children's recode and individual recode
 datasets_kr <- dhs_datasets(
@@ -122,12 +120,12 @@ datasets_pr <- dhs_datasets(
 
 # download datsets and variables
 downloads_kr <- get_datasets(datasets_kr$FileName)
-vars_kr <- c("caseid", "v001", "v002", "v003", "midx", "v005", 'b4', "b5", 'b16',
+vars_kr <- c("caseid", "v001", "v002", "v003", "midx", "v005", 'b4', "b5",
              "b8", "v459", "v008", "v190", "h1", "h7", "h9", 'h10', "h22", "h32z")
 questions_kr <- search_variables(datasets_kr$FileName, variables = vars_kr)
 
 downloads_pr <- get_datasets(datasets_pr$FileName)
-vars_pr <- c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", 'hv024', "hv025", "hv103", "hml12", "hc1", "hml32", "hml35", 'sh212i')
+vars_pr <- c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv103", "hml12", "hc1", "hml35")
 questions_pr <- search_variables(datasets_pr$FileName, variables = vars_pr)
 
 
@@ -136,61 +134,17 @@ print(questions_kr[1:length(vars_kr), 1:3])
 print(questions_pr[1:length(vars_pr), 1:3])
 
 # extract data
-datasets_kr %>% dplyr::select(CountryName, SurveyYear, FileName)
-
 extract_kr <- extract_dhs(questions_kr, add_geo = TRUE)
 extract_bound_kr <-
-  full_join(
-    extract_kr$BJKR61FL,
-    extract_kr$BFKR62FL) %>%
-  full_join(extract_kr$BUKR71FL) %>%
-  full_join(extract_kr$CMKR61FL) %>%
-  full_join(extract_kr$TDKR71FL) %>%
-  full_join(extract_kr$CGKR61FL) %>%
-  full_join(extract_kr$CDKR51FL) %>%
-  full_join(extract_kr$CIKR62FL) %>%
-  full_join(extract_kr$GMKR81FL) %>%
-  full_join(extract_kr$GNKR71FL) %>%
-  full_join(extract_kr$KEKR72FL) %>%
-  full_join(extract_kr$MWKR7AFL) %>%
-  full_join(extract_kr$MLKR7AFL) %>%
-  full_join(extract_kr$NIKR61FL) %>%
-  full_join(extract_kr$NGKR7BFL) %>%
-  full_join(extract_kr$RWKR53FL) %>%
-  full_join(extract_kr$SNKR61FL) %>%
-  full_join(extract_kr$TZKR63FL) %>%
-  full_join(extract_kr$TGKR61FL) %>%
-  full_join(extract_kr$UGKR7BFL) %>%
-  full_join(extract_kr$ZMKR71FL)
-  #   by=c("caseid", "v001", "v002", "v003", "midx", "v005", "b4", "b5", "b8", 'b16', "v459", "v008", "v190", "h1", "h7", "h9", "h10", "h22", "h32z", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
-  # )
+  rbind_labelled(
+    extract_kr$NGKR7BFL
+  )
 
 extract_pr <- extract_dhs(questions_pr, add_geo = TRUE)
 extract_bound_pr <-
-  full_join(
-    extract_pr$BJPR61FL,
-    extract_pr$BFPR62FL) %>%
-  full_join(extract_pr$BUPR71FL) %>%
-  full_join(extract_pr$CMPR61FL) %>%
-  full_join(extract_pr$TDPR71FL) %>%
-  full_join(extract_pr$CGPR61FL) %>%
-  full_join(extract_pr$CDPR51FL) %>%
-  full_join(extract_pr$CIPR62FL) %>%
-  full_join(extract_pr$GMPR81FL) %>%
-  full_join(extract_pr$GNPR71FL) %>%
-  full_join(extract_pr$KEPR72FL) %>%
-  full_join(extract_pr$MWPR7AFL) %>%
-  full_join(extract_pr$MLPR7AFL) %>%
-  full_join(extract_pr$NIPR61FL) %>%
-  full_join(extract_pr$NGPR7BFL) %>%
-  full_join(extract_pr$RWPR53FL) %>%
-  full_join(extract_pr$SNPR61FL) %>%
-  full_join(extract_pr$TZPR63FL) %>%
-  full_join(extract_pr$TGPR61FL) %>%
-  full_join(extract_pr$UGPR7BFL) %>%
-  full_join(extract_pr$ZMPR71FL)
-  #   by = c("hhid", "hv001", "hv002", "hvidx", "hv005", "hv023", "hv024", "hv025", "hv103", "hml12", "hc1", "hml32", "hml35", "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "DHSREGNA", "SurveyId")
-  # )
+  rbind_labelled(
+    extract_pr$NGPR7BFL
+  )
 
 # save
 saveRDS(extract_bound_kr,  file = "./03_output/DHS_nets_dtp3_KR.rds")
@@ -202,12 +156,12 @@ extract_bound_pr <- readRDS("./03_output/DHS_nets_dtp3_PR.rds")
 
 
 # first filter to children aged 1 and 2 (and alive) in children's recode, then link person's recode. Then keep those who slept in house last night.
-# link KR and PR datasets by v001 and v002 per: https://dhsprogram.com/data/Merging-datasets.cfm
 dat_start <- extract_bound_kr %>%
-  filter(b5 == 1) %>% # filtering to alive children
-  left_join(extract_bound_pr, by = c("v001" = "hv001", "v002" = "hv002", "b16" = "hvidx",
-                                     "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME", "SurveyId",
-                                     "DHSREGNA")) %>%
+  filter(b5 == 1, b8 %in% c(1,2)) %>%
+  left_join(extract_bound_pr, by = c("v001" = "hv001", "v002" = "hv002", "v003" = "hvidx",
+                                     "CLUSTER", "ALT_DEM", "LATNUM", "LONGNUM", "ADM1NAME",
+                                     "DHSREGNA", "SurveyId")) %>%
+  filter(hv103 == 1, hml12 != 9, v459 != 9) %>%
   mutate(wt = v005/1e6)
 
 # summarize data by admin1
@@ -327,25 +281,22 @@ dat_all$countrycode <- substr(dat_all$SurveyId, 1, 2)
 dat_all <- dat_all %>% dplyr::select(-c(SurveyId))
 
 # add coordinates
-dat_all <- rbind(
-  (shpNGA %>% st_as_sf() %>%
-   dplyr::select(name_1) %>%
-   mutate(name_1 = tolower(name_1))),
-  (shpGHA %>% st_as_sf() %>%
-   dplyr::select(name_1) %>%
-   mutate(name_1 = tolower(name_1)))) %>%
+dat_all <- shp %>% st_as_sf() %>% dplyr::select(name_1) %>%
+  mutate(name_1 = tolower(name_1)) %>%
   left_join(dat_all %>% mutate(ADM1NAME = case_when(ADM1NAME=='FCT ABUJA'~'abuja',
                                                     ADM1NAME=='NASARAWA'~'nassarawa',
                                                     TRUE ~ ADM1NAME),
                                ADM1NAME = tolower(ADM1NAME)), by = c('name_1'='ADM1NAME'))
 
+
 # save to .rds
 saveRDS(dat_all, paste0("./03_output/combined_DHS_data_", level, ".rds"))
 
+
 # add travel times and PfPR to individual level data
-# transforming to UTM 31N, to allow for creation of buffers in meters
+# transforming to UTM 32N, to allow for creation of buffers in meters
 dhs_map <- st_as_sf(dat_start, coords = c("LONGNUM", "LATNUM"), crs = 4326) # all DHS coords in WGS 1984
-dhs_map <- st_transform(dhs_map %>% dplyr::select(SurveyId, CLUSTER) %>% dplyr::distinct(.keep_all=T), crs = 32631)
+dhs_map <- st_transform(dhs_map %>% dplyr::select(CLUSTER) %>% dplyr::distinct(.keep_all=T), crs = 32632)
 plot(dhs_map)
 
 # extract travel times around cluster points, with a 1km buffer
@@ -369,7 +320,7 @@ ggplot(dhs_map %>% filter(!is.na(PfPRbuff))) +
 # inspect individual level DHS data
 # look for associations with DPT3, ITN, travel time
 # make variables for DPT3 and ITN status
-dat_start2 <- dat_start %>%
+dat_start <- dat_start %>%
   mutate(dpt3 = case_when(h7 %in% c(1, 2, 3) ~ 1,
                           h7 == 0 ~ 0,
                           TRUE ~ NA_real_),
@@ -382,48 +333,29 @@ dat_start2 <- dat_start %>%
          vac_y_itn_n = case_when(h7 %in% c(1, 2, 3) & hml12 %in% c(0,3) ~ 1,
                                  is.na(h7) | is.na(hml12) ~ NA_real_,
                                  TRUE ~ 0),
-         microscopy = case_when(hml32 == 0 ~ 0,
-                                hml32 == 1 ~ 1,
-                                TRUE ~ NA_real_),
-         mRDT = case_when(hml35 == 0 ~ 0,
-                          hml35 == 1 ~ 1,
-                          TRUE ~ NA_real_),
-         # ACT = case_when(sh212i == 0 ~ 0,
-         #                 sh212i == 1 ~ 1,
-         #                 TRUE ~ NA_real_),
-         treatment= case_when(h32z == 0 ~ 0,
-                              h32z == 1 ~ 1,
-                              TRUE ~ NA_real_),
          wealth = case_when(v190 == 1 ~ 'poorest',
                             v190 == 2 ~ 'poorer',
                             v190 == 3 ~ 'middle',
                             v190 == 4 ~ 'richer',
-                            v190 == 5 ~ 'richest'),
-         residence = case_when(hv025 ==1 ~ 'urban',
-                               hv025 == 2 ~ 'rural'),
-         sex = case_when(b4 == 1 ~ 'male',
-                         b4 == 2 ~ 'female'))
-  # left_join(dhs_map, by = c('SurveyId', 'CLUSTER'))
+                            v190 == 5 ~ 'richest')) %>%
+  left_join(dhs_map, by = 'CLUSTER')
 
 # save to .rds
-saveRDS(dat_start2, "./03_output/individual_DHS_data.rds")
+saveRDS(dat_start, "./03_output/individual_DHS_data.rds")
 
 
 # models -----------------------------------------------------------------------
-# choose 1 option for NGA or GHA
 dat_start <- readRDS("./03_output/individual_DHS_data.rds") %>%
-  filter(SurveyId == 'GH2014DHS') %>% # NG2018DHS
-  mutate(travel60 = travel/60) %>%
-  filter(!is.na(PfPRbuff))
+  filter(hv023 %in% c(51,52)) %>% # limit to admin1 Akwa Ibom
+  mutate(travel60 = travel/60)
 
-
-# plot clusters to ensure correct admin1 or country was selected
+# plot clusters to ensure correct admin1 was selected
 ggplot() +
   geom_sf(data = st_as_sf(shp)) +
   geom_sf(data = st_as_sf(dat_start))
 
 # create survey design object
-DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start %>% filter(!is.na(hv023)))
+DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat_start)
 
 # group data by cluster
 plotd <- dat_start %>% group_by(CLUSTER) %>%
@@ -480,79 +412,33 @@ tidy(m, conf.int = T, conf.level = 0.95, exponentiate = T)
 m <- svyglm(dpt3 ~ factor(v190), DHSdesign, family=binomial("logit"))
 tidy(m, conf.int = T, conf.level = 0.95, exponentiate = T)
 
+dat_start %>% group_by(v190) %>%
+  summarize(n=n(),
+            wealth = unique(wealth),
+            itn_mean = mean(itn, na.rm=T),
+            itn_access_mean = mean(itn_access, na.rm=T),
+            dpt3_mean = mean(dpt3, na.rm=T),
+            vac_y_itn_n_mean = mean(vac_y_itn_n, na.rm=T),
+            PfPR_median = median(PfPRbuff, na.rm=T),
+            PfPR_25 = quantile(PfPRbuff, prob=0.25, na.rm=T),
+            PfPR_75 = quantile(PfPRbuff, prob=0.75, na.rm=T))
 
-# create function for printing out weighted means
-output_admin1 <- function(admin1) {
+m <- svytotal(~interaction(as.factor(hv006), as.factor(hml32)), DHSdesign, na.rm=T)
 
-  dat <- dat_start %>% filter(!is.na(hv023)) %>%
-    # filter(ADM1NAME == admin1)
-    filter(SurveyId == admin1)
-
-  DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt, data = dat)
-
-  survmean_factor <- function(var1, var2){
-
-    m <- svyby(as.formula(paste0('~', var1)), as.formula(paste0('~', var2)), DHSdesign, svymean, na.rm=T, survey.lonely.psu="adjust")
-    m <- as.data.frame(m)
-    rownames(m) <- c()
-    m %>% rename(value = var1, factor = var2) %>% mutate(var = var1)
-
-  }
-
-  t <- map2_dfr(rep(c('itn_access','itn','dpt3','vac_y_itn_n', 'microscopy', 'mRDT',
-                      # 'ACT', 'travel60',
-                      'treatment'), 3),
-         c(rep('wealth', 7), rep('sex', 7), rep('residence', 7)),
-         survmean_factor) %>% mutate(admin1 = admin1)
-
-  t
-
+survmean <- function(var){
+  m <- svymean(as.formula(paste0('~', var)), DHSdesign, na.rm=T, survey.lonely.psu="adjust")
+  m <- as.data.frame(m) %>% rename('SE' = var)
+  rownames_to_column(m, var = 'var')
 }
 
-# run function
-vars <- unique(dat_start$SurveyId)
-d <- map_dfr(vars[c(1:5, 7:16, 18:21)], output_admin1)
+map_dfr(c('itn_access','itn','dpt3','vac_y_itn_n'), survmean)
+summary(dat_start$PfPRbuff)
 
-test  <- d %>% group_by(factor, var) %>%
-  filter(factor %in% c('urban', 'rural')) %>%
-  filter(!(var == 'microscopy' & value == 0)) %>%
-  summarize(median = median(value),
-            q25 = quantile(value, p=0.25),
-            q75 = quantile(value, p=0.75)) %>%
-  arrange(var, factor)
-
-summary(d[d$var=='treatment',]$value)
-
-# copy estimates to clipboard by factor variable
-d %>% select(-se) %>%
-  filter(factor %in% c('urban', 'rural')) %>%
-  pivot_wider(names_from = factor, values_from = value) %>%
-  arrange(var, admin1, rural, urban) %>% write.table("clipboard",sep="\t")
-
-d %>% select(-se) %>%
-  filter(factor %in% c('male', 'female')) %>%
-  pivot_wider(names_from = factor, values_from = value) %>%
-  arrange(var, admin1, male, female) %>% write.table("clipboard",sep="\t")
-
-d %>% select(-se) %>%
-  filter(factor %in% c('poorest', 'poorer', 'middle', 'richer', 'richest')) %>%
-  pivot_wider(names_from = factor, values_from = value) %>%
-  arrange(var, admin1) %>% write.table("clipboard",sep="\t")
+PfPR2 <- malariaAtlas::getRaster(
+  surface = 'Plasmodium falciparum PR2 - 10 version 2020',
+  year = 2018,
+  shp = shp)
 
 
-# find correlation between ITN use and DPT3 vaccination
-dat <- dat_start %>% filter(!is.na(hv023)) %>% filter(ADM1NAME == 'Eastern')
-
-# unweighted
-cor(dat$itn, dat$dpt3, method = 'pearson', use = 'complete.obs')
-
-# weighted
-DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt,
-                               data = dat %>%
-                                 filter(!is.na(itn) & !is.na(dpt3) & residence == 'rural'))
-jtools::svycor(~dpt3 + itn, design = DHSdesign)
-
-DHSdesign <- survey::svydesign(id = ~CLUSTER, strata = ~hv023, weights = ~wt,
-                               data = dat %>%
-                                 filter(!is.na(itn) & !is.na(dpt3) & residence == 'urban'))
-jtools::svycor(~dpt3 + itn, design = DHSdesign)
+adminselect <- shp[shp$name_1=='Akwa Ibom',]
+raster::extract(PfPR2, adminselect, weights=TRUE, fun=mean, na.rm=T)
