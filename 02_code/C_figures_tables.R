@@ -154,7 +154,7 @@ RTSStime <- output %>% select(rtss_mass_timesteps, seasonality) %>%
   group_by(seasonality) %>%
   mutate(month = unlist(rtss_mass_timesteps)[[1]]) %>%
   distinct() %>%
-  mutate(month = month / (365/12) + 1, intervention='RTS,S SV dose 3',
+  mutate(month = month / (365/12) + 1, intervention='RTS,S seasonal dose 3',
          month = ifelse(seasonality=='perennial', 0, month)) %>% select(-rtss_mass_timesteps)
 
 ITNtime <- output %>% select(bednet_timesteps, seasonality) %>%
@@ -171,7 +171,8 @@ none <- dat %>%
   filter(ITNboost == 0 & ITNuse == 0.5 & RTSS == 'none' & ITN == 'pyr' &
            resistance == 0 & treatment == 0.45 & (SMC == 0 | (seasonality == 'highly seasonal'))) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
-  filter(month <= 12 & pfpr == 0.4)
+  filter(month <= 12 & pfpr == 0.4) %>%
+  mutate(seasonality_f = factor(seasonality, levels=c('perennial','seasonal','highly seasonal')))
 
 none <- rbind(none, none %>% mutate(month = month-13))
 
@@ -180,11 +181,10 @@ my_text <- data_frame(seasonality = 'perennial',
                       x = c(-6, 7),
                       y = c(0.25,0.25))
 
-
 # plot
 ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   geom_line(aes(x = month, y = n_inc_clinical_91.25_1825/n_91.25_1825), alpha = 0.8) +
-  geom_rect(data = interventions %>% filter(intervention=='RTS,S SV dose 3'), aes(xmin=1, xmax=12, ymin=0.01, ymax=0.03, fill = 'RTSS'), alpha = 0.1) +
+  geom_rect(data = interventions %>% filter(intervention=='RTS,S seasonal dose 3'), aes(xmin=1, xmax=12, ymin=0.01, ymax=0.03, fill = 'RTSS'), alpha = 0.1) +
   geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month<0),
             aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
   geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month>0),
@@ -245,7 +245,7 @@ names(supp.labs) <- c(0,.25,.50,.75)
 # removing dominated strategies
 output %>%
   # filter out mixed strategies
-  filter(intervention %in% c('ITN 10% boost', 'ITN PBO', 'SMC', 'RTS,S EPI', 'RTS,S SV')) %>%
+  filter(intervention %in% c('ITN 10% increase', 'ITN PBO', 'SMC', 'RTS,S age-based', 'RTS,S seasonal')) %>%
   group_by(ID) %>% arrange(ID, deltacost) %>%
   # filter out dominated strategies
   mutate(dominate = case_when(deltadaly < lag(deltadaly,n=5L) ~ 1,
@@ -292,7 +292,7 @@ ggsave('./03_output/impact_cloudIII.pdf', width=15, height=7)
 
 
 # all strategies, by baseline ITNuse and seasonality
-output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','RTS,S SV','ITN 10% boost + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% boost + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
+output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% increase','ITN PBO','RTS,S age-based','RTS,S seasonal','ITN 10% increase + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% increase + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
 RColorBrewer::brewer.pal(12, "Paired")
 # colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
@@ -612,7 +612,7 @@ deltaseason('perennial')
     mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal')))
 
   # All interventions, by baseline ITNuse and seasonality
-  output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','RTS,S SV','ITN 10% boost + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% boost + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
+  output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% increase','ITN PBO','RTS,S age-based','RTS,S seasonal','ITN 10% increase + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% increase + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
   RColorBrewer::brewer.pal(12, "Paired")
   # colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
@@ -889,9 +889,16 @@ ggsave('./03_output/interventionCE_density_univariate.pdf', width=8, height=5)
 
 
 # box and whisker delta cost / delta daly --------------------------------------
-
 # inspect range of CE values
 summary(scenarios$CE)
+test <- scenarios %>% filter(resistance==0.8) %>% select(CE,intervention,file:fifth)
+summary(test$CE)
+
+scenarios %>% group_by(intervention_f) %>%
+  summarize(n=n(),
+            median = round(median(CE)),
+            q25 = round(quantile(CE, p=0.25)),
+            q75 = round(quantile(CE, p=0.75)))
 
 # set up text for plot
 text_high <- textGrob("Highest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
@@ -899,14 +906,14 @@ text_low <- textGrob("Lowest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 
 # set up order of interventions by median CE for plot
 levels <- scenarios %>%
-  mutate(group = case_when(intervention_f %in% c('ITN 10% boost', 'ITN PBO', 'SMC', 'RTS,S SV', 'RTS,S EPI') ~ 'uni',
+  mutate(group = case_when(intervention_f %in% c('ITN 10% increase', 'ITN PBO', 'SMC', 'RTS,S seasonal', 'RTS,S age-based') ~ 'uni',
                            TRUE ~ 'multi')) %>%
   group_by(intervention_f, group) %>%
   summarize(med = median(CE, na.rm=T) )%>% ungroup() %>%
   arrange(desc(group), med)
 
 # plot of cost per DALY averted
-scenarios %>% filter(intervention != 'none') %>%
+scenarios %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
   mutate(rank=as.numeric(intervention_f)) %>%
 
@@ -918,8 +925,8 @@ ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=interv
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " DALYs")),
        fill = 'intervention',
-       color = 'intervention',
-       caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T)))) +
+       # caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T))),
+       color = 'intervention') +
   annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-150,ymax=-150) +
   annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-150,ymax=-150) +
   scale_x_continuous(breaks=c(0)) +
@@ -1506,14 +1513,14 @@ univariateseason('perennial')
 # < faceted by season ----------------------------------------------------------
 colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
 
-# by pfpr
 output <- scenarios %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
-  filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+  filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
   group_by(ID) %>% arrange(ID, CE) %>%
   slice(1L)
 
+# by pfpr
 A <- ggplot(output) +
   geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
   labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
@@ -1541,7 +1548,8 @@ C <- ggplot(output) +
 ITNefficient <- function(var, label) {
   scenarios %>%
     filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
-    filter(intervention %in% c('ITN 10% boost','ITN PBO','SMC','RTS,S EPI','RTS,S SV')) %>%
+    filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
+    mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
     group_by(ID) %>% arrange(ID, {{var}}) %>%
     slice(1L) %>% select(intervention_f, seasonality, pfpr, {{var}}) %>%
     mutate(model=label) %>%
@@ -1573,6 +1581,15 @@ E <- ggplot(output) +
 
 ggsave(paste0('./03_output/univariate_quad_by_season.pdf'), width=17, height=5)
 
+
+test <- output %>%
+  mutate(intervention =
+           case_when(intervention %in% c('RTS,S age-based', 'RTS,S seasonal') ~ 'RTS,S',
+                     TRUE ~ intervention)) %>%
+  group_by(seasonality, pfpr) %>%
+  mutate(n=n()) %>%
+  group_by(seasonality, intervention, pfpr) %>%
+  summarize(n=mean(n), t=n(), p=t/n*100)
 
 
 # ITN usage and countries -----------------------------------------------------
@@ -1831,28 +1848,16 @@ merge %>% group_by(intervention) %>%
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
-merge %>% group_by(intervention) %>% filter(resistance==0) %>%
-  summarize(dominate = sum(dominate),
-            ndominate = n()-dominate,
-            t = n(),
-            p_dominate = dominate / t * 100,
-            p_ndominate = ndominate / t*100,
-            p_best = 100 - p_dominate,
-            ICER_m = median(ICER, na.rm=T),
-            ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
-            ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
-merge %>% group_by(intervention) %>% filter(resistance>0) %>%
-  summarize(dominate = sum(dominate),
-            ndominate = n()-dominate,
-            t = n(),
-            p_dominate = dominate / t * 100,
-            p_ndominate = ndominate / t*100,
-            p_best = 100 - p_dominate,
-            ICER_m = median(ICER, na.rm=T),
-            ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
-            ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
+merge %>% filter(dominate==0) %>%
+  mutate(RTSSalone = ifelse(intervention %in% c('RTS,S age-based', 'RTS,S seasonal'), 1, 0)) %>%
+  group_by(seasonality, ID) %>%
+  summarize(rtss = sum(RTSSalone, na.rm=T)) %>%
+  mutate(rtss = ifelse(rtss>=1,1,0)) %>%
+  group_by(seasonality) %>%
+  summarize(n=n(), t=sum(rtss, na.rm=T), p=t/n*100, q=100-p)
 
+merge %>% dplyr::select(ID) %>% distinct()
 
 
 # ICERs among children ---------------------------------------------------------
@@ -2014,12 +2019,30 @@ scenarios %>%
        y='clinical incidence (per person)',
        fill = '',
        color = '') +
-  theme_bw() +
+  theme_classic() +
   theme(panel.grid.minor = element_blank(),
         panel.grid.major = element_line(colour = "grey96"))
 
 ggsave('./03_output/inc_outcomes_casestudy_season.pdf', width=8, height=4)
 
+scenarios %>%
+  filter(var == 'severe incidence <5s') %>%
+  ggplot(aes(color=scenario_f, shape=residence)) +
+  geom_vline(aes(xintercept=0), lty=2, color='darkgrey', size=.8) +
+  geom_pointrange(aes(y=(scenario)*-1, x=estimate, xmin=lower, xmax=upper), alpha=0.7,
+                  position = position_dodge(width = .2)) +
+  scale_color_manual(values = c('black',"#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+  facet_grid(seasonality~scenario2_f, scales = 'free') +
+  scale_x_continuous(limits = c(0, max(scenarios$upper)), breaks = scales::trans_breaks(identity, identity, n = 3)) +
+  scale_y_continuous(breaks = seq(-5,-1,1),
+                     labels = NULL) +
+  labs(x='',
+       y='severe incidence (<5s)',
+       fill = '',
+       color = '') +
+  theme_classic() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = "grey96"))
 
 
 # < equality measures ----------------------------------------------------------
@@ -2028,23 +2051,59 @@ readRDS('./03_output/scenarios2_casestudy.rds') %>% ungroup() %>%
   dplyr::select(seasonality, scenario2_f, scenario_f, CE_daly) %>%
   arrange(seasonality, scenario2_f, scenario_f) %>%
   pivot_wider(names_from = scenario_f, values_from = CE_daly) %>%
-  write.table("clipboard",sep="\t")
+  write.table("clipboard", sep="\t")
 
-readRDS('./03_output/scenarios2_casestudy.rds')  %>%
+A <- readRDS('./03_output/scenarios2_casestudy.rds')  %>%
   ggplot(aes(color=scenario_f, group=scenario_f)) +
-  geom_pointrange(aes(x=scenario, y=CE_daly_u5, ymin=CE_daly_u5_lower, ymax=CE_daly_u5_upper), alpha=0.7) +
-  geom_hline(yintercept = 0, lty=2, color='grey') +
+  geom_pointrange(aes(y=scenario*-1, x=CE_daly_u5, xmin=CE_daly_u5_lower, xmax=CE_daly_u5_upper), alpha=0.7) +
+  geom_vline(xintercept = 0, lty=2, color='grey') +
   scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
-  scale_x_continuous(limits=c(0.5,4.4), breaks=c(1,2,3,4)) +
+  scale_y_continuous(limits=c(-4.4, -0.5), breaks=c(-4,-3,-2,-1), labels = NULL) +
   facet_grid(seasonality~scenario2_f, scales = 'free') +
   labs(x='',
        y=expr(paste(Delta," cost / ", Delta, " DALYs")),
        fill = '',
        color = '') +
-  theme_classic()
+  theme_classic() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = "grey96"))
 
 
-ggsave('./03_output/pointrange_casestudy_season.pdf', width=8, height=4)
+B <- scenarios %>%
+  group_by(seasonality, scenario, scenario2_f, scenario_f, var) %>%
+  arrange(seasonality, scenario2_f, scenario, scenario_f, var, residence) %>%
+  filter(var %in% c('severe incidence <5s')) %>%
+  summarize(change_estimate = estimate - lead(estimate),
+            sum_cost = cost_total + lead(cost_total)) %>%
+  filter(!is.na(change_estimate)) %>%
+  group_by(seasonality, scenario2_f, var) %>% arrange(var) %>%
+  mutate(base_estimate = head(change_estimate, n=1),
+         base_cost = head(sum_cost, n=1),
+         per_change = (base_estimate - change_estimate) / base_estimate*100,
+         # per_cost = (sum_cost - base_cost) / base_cost*100,
+         change_cost = (sum_cost - base_cost),
+         equality =  change_cost / per_change) %>%
+  dplyr::select(seasonality, scenario2_f, scenario, scenario_f, equality) %>%
+  filter(scenario_f != 'baseline') %>%
+
+  ggplot(aes(color=scenario_f)) +
+  geom_vline(xintercept = 0, lty=2, color='grey') +
+  geom_pointrange(aes(y=scenario*-1, x=equality, xmin=equality, xmax=equality), alpha=0.7) +
+  scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+  facet_grid(seasonality~scenario2_f, scales = 'free') +
+  scale_x_continuous(limits = c(min(scenarios$upper), max(scenarios$upper)), breaks = scales::trans_breaks(identity, identity, n = 3)) +
+  scale_y_continuous(limits=c(-5.4, -1.5), breaks=c(-4,-3,-2,-1), labels = NULL) +
+  labs(x='',
+       y=expr(paste(Delta," severe incidence (<5s) / ", Delta, " cost")),
+       fill = '',
+       color = '') +
+  theme_classic() +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour = "grey96"))
+
+(A / B) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/pointrange_casestudy_season.pdf', width=9, height=6)
 
 
 # % change in outcome / % change in cost

@@ -1,7 +1,7 @@
 # Cost effectiveness -----------------------------------------------------------
 library(tidyverse)
-# devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
 library(netz)
+# devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
 
 
 # pull in data from simulation runs (all interventions)
@@ -160,10 +160,6 @@ dalyoutput_cost <- dalyoutput %>%
   ungroup() %>% rowwise()
 
 
-# check that the number of ITN distribution times is correct for ITNuse2 == 0.1
-dalyoutput_cost %>% filter(ITNboost==1 & ITNuse==0) %>% group_by(bednet_timesteps) %>% summarize()
-
-
 # read in netz package data to find the annual nets to distribute to give the simulated usage
 nets_data <- netz::prepare_data()
 summary(nets_data$use_rate_by_country)
@@ -246,7 +242,7 @@ output <- dalyoutput_cost %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, sep="_")) # create unique identifier
 
-# there should be 90 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 2.5 resistance (only pbo in resistance scenarios)
+# there should be 270 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 3 treatmet x 2.5 resistance (only pbo in resistance scenarios)
 none <- output %>%
   filter(ITNboost==0 & ITN=='pyr' & RTSS=='none' & # filter out interventions
            (SMC==0 | (seasonality=='highly seasonal'))) %>%
@@ -283,23 +279,20 @@ scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
 
     ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'none',
 
+    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN 10% increase',
     ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN PBO',
-    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='none' ~ 'ITN 10% boost',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTS,S age-based',
+    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTS,S seasonal',
     ITN=='pyr' & ITNboost==0 & (SMC==0.85 & seasonality=='seasonal') & RTSS=='none' ~ 'SMC',
-    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='SV' ~ 'RTS,S SV',
-    ITN=='pyr' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS=='EPI' ~ 'RTS,S EPI',
-
-    ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN PBO + SMC',
-    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN 10% boost + SMC',
-
+    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS!='none' ~ 'ITN 10% increase + RTS,S',
     ITN=='pbo' & ITNboost==0 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS!='none' ~ 'ITN PBO + RTS,S',
-    ITN=='pyr' & ITNboost==1 & (SMC==0 | (seasonality=='highly seasonal')) & RTSS!='none' ~ 'ITN 10% boost + RTS,S',
-
+    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN 10% increase + SMC',
+    ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS=='none' ~ 'ITN PBO + SMC',
     ITN=='pyr' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'RTS,S + SMC',
-    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN 10% boost + RTS,S + SMC',
+    ITN=='pyr' & ITNboost==1 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN 10% increase + RTS,S + SMC',
     ITN=='pbo' & ITNboost==0 & (SMC==0.85 & (seasonality=='seasonal')) & RTSS!='none' ~ 'ITN PBO + RTS,S + SMC')) %>%
 
-  mutate(intervention_f = factor(intervention, levels=c('none', 'ITN 10% boost', 'ITN PBO', 'RTS,S EPI', 'RTS,S SV', 'SMC', 'ITN 10% boost + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% boost + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC', 'ITN PBO + RTS,S + SMC'))) %>%
+  mutate(intervention_f = factor(intervention, levels=c('none', 'ITN 10% increase', 'ITN PBO', 'RTS,S age-based', 'RTS,S seasonal', 'SMC', 'ITN 10% increase + RTS,S', 'ITN PBO + RTS,S', 'ITN 10% increase + SMC', 'ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC', 'ITN PBO + RTS,S + SMC'))) %>%
 
   mutate(rank=as.numeric(intervention_f))
 
@@ -308,8 +301,10 @@ table(scenarios$intervention_f, scenarios$rank, useNA = 'always')
 
 # inspect range of scenarios
 table(scenarios$ID)
-summary(scenarios$CE)
-test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE) # all negative CE scenarios have resistance except 2
+
+summary(scenarios$CE[scenarios$resistance==0])
+
+test <- scenarios %>% filter(CE<0) %>% select(pfpr, seasonality, resistance, intervention, daly, daly_baseline, CE); table(test$resistance) # all negative CE scenarios have resistance except 2;
 
 saveRDS(scenarios, './03_output/scenarios.rds')
 
@@ -328,21 +323,21 @@ none <- dalyoutput_cost %>%
   geom_smooth(method = 'lm', se=F) +
   facet_wrap(~seasonality) + theme_classic() +
   labs(x='PfPR', y='DALYs', color='ITN use',
-       title = "Baseline scenarios, DALYs by PfPR and seasonality")
+       title = "DALYs increase by PfPR and seasonality")
 
   ggplot(none, aes(x=pfpr, y=yll, color=factor(ITNuse))) +
     geom_point() +
     geom_smooth(method = 'lm', se=F) +
     facet_wrap(~seasonality) + theme_classic() +
     labs(x='PfPR', y='YLL', color='ITN use',
-         title = "Baseline scenarios, YLLs by PfPR and seasonality")
+         title = "YLLs increase by PfPR and seasonality")
 
   ggplot(none, aes(x=pfpr, y=yld, color=factor(ITNuse))) +
     geom_point() +
     geom_smooth(method = 'lm', se=F) +
     facet_wrap(~seasonality) + theme_classic() +
     labs(x='PfPR', y='YLD', color='ITN use',
-         title = "Baseline scenarios, YLDs by PfPR and seasonality")
+         title = "YLDs increase by PfPR and seasonality")
 
 # RTSS doses are stable
 table(dalyoutput_cost$RTSS, dalyoutput_cost$RTSScov, dalyoutput_cost$rtss_mass_timesteps)
@@ -360,7 +355,7 @@ summary(dalyoutput_cost$daly)
 test <- scenarios %>% mutate(deltadaly = daly_baseline - daly)
 summary(test$deltadaly)
 test <- test %>% filter(deltadaly < 0)
-table(test$resistance) # most negative DALYs are in the high resistance scenarios
+table(test$resistance) # all negative DALYs are in resistance scenarios
 
 # double-check relationship between cost_ITN_linear and cost_ITN:
 # similar at low usage but divering at higher usage

@@ -21,7 +21,7 @@ share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/ho
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
-                                  cluster = "fi--dideclusthn", # fi--dideclusthn OR fi--didemrchnb
+                                  cluster = "fi--didemrchnb", # fi--dideclusthn OR fi--didemrchnb
                                   parallel = FALSE)
 
 # obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
@@ -212,3 +212,4 @@ dat3 <- dat2 %>%
 
 # save
 saveRDS(dat3, paste0(data.dir, "03_output/rtss_long_casestudy.rds"))
+

@@ -130,7 +130,7 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   filter(exist==0) %>%
   select(-f, -exist)
 
-t <- obj$enqueue_bulk(combo[1:500,], runsimGF) # run 500 at a time [1:500,]
+t <- obj$enqueue_bulk(combo[1:2574,], runsimGF) # run 500 at a time [1:500,]
 t$status()
 
 beepr::beep(1)
