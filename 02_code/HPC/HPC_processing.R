@@ -31,9 +31,10 @@ saveRDS(dat, paste0(data.dir, "03_output/rtss_raw.rds"))
 
 # check prevalence - that the EIR used in the simulation results in the matching prevalence value
 test <- dat %>%
-  filter((RTSS=='none' & ITN=='pyr') & SMC==0 | (seasonality=="highly seasonal" & SMC==0.85)) %>%
+  filter((RTSS=='none' & ITN=='pyr' & resistance==0) &
+           (SMC==0 | (seasonality=="highly seasonal" & SMC==0.85))) %>%
   filter(year %in% c(1,2,3)) %>%
-  group_by(seasonality, ITNuse, EIR, pfpr) %>%
+  group_by(seasonality, ITNuse, treatment, EIR, pfpr) %>%
   summarize(prev = mean(n_detect_730_3650/n_730_3650))
 
 
@@ -71,23 +72,4 @@ dat3 <- dat2 %>%
 # save
 saveRDS(dat3, paste0(data.dir, "03_output/rtss_long.rds"))
 
-
-# averted cases / severe-cases / deaths ----------------------------------------
-# summarizing outputs when there is no intervention
-baseline <- dat3 %>%
-  filter(ITNuse==0, RTSS=='none', ITN=='pyr', SMC==0) %>%
-  select(file, EIR, pfpr, seasonality, age:inc_severe) %>%
-  rename(n_baseline = n, inc_clinical_baseline = inc_clinical, inc_severe_baseline = inc_severe)
-
-# save
-saveRDS(baseline, paste0(data.dir, "03_output/rtss_baseline.rds"))
-
-averted <- dat3 %>%
-  filter(!(file %in% baseline$file)) %>% # removing scenarios with no intervention
-  left_join(baseline %>% select(-file), by=c('EIR', 'pfpr', 'seasonality', 'age')) %>% # joining in baseline data
-  mutate(case_avert = ((inc_clinical/n) - (inc_clinical_baseline/n_baseline)) * 10000, # cases averted per 100,000 people
-         severe_avert = ((inc_severe/n) - (inc_severe_baseline/n_baseline)) * 10000)   # severe cases averted per 100,000 people
-
-# save
-saveRDS(averted, paste0(data.dir, "03_output/rtss_avert.rds"))
 

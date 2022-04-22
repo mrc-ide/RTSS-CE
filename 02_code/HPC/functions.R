@@ -323,7 +323,8 @@ runsimGF <- function(population,        # simulation population
   }
 
   # correlate interventions  ----------
-  correlations <- get_correlation_parameters(params)
+  # correlations not working correctly with set.seed()
+  # correlations <- get_correlation_parameters(params)
 
   # if (RTSScov == 0.77 & pfpr == 0.40) {
   #   correlations$inter_intervention_rho('rtss', 'bednets', 0.04)
@@ -341,8 +342,8 @@ runsimGF <- function(population,        # simulation population
 
   output <- run_simulation(
     timesteps = warmup + sim_length,
-    parameters = params,
-    correlations = correlations) %>%
+    # correlations = correlations,
+    parameters = params) %>%
 
     # add vars to output
     mutate(EIR = starting_EIR,
@@ -498,6 +499,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, treatment, na
   params <- set_equilibrium(params, as.numeric(init_EIR))
 
   set.seed(123)
+
   output <- run_simulation(
     timesteps = 9 * year,
     parameters = params,
