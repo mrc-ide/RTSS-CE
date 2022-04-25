@@ -522,7 +522,7 @@ scenario4 <- output %>%
 scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>% full_join(scenario4) %>%
   mutate(scenario_f = factor(scenario,
                              levels=c(1,2,3,4),
-                             labels=c('mass ITN boost', 'mass age-based RTS,S', 'targeted ITN boost', 'targeted age-based RTS,S')))
+                             labels=c('mass ITN 10% increase', 'mass age-based RTS,S', 'targeted ITN 10% increase', 'targeted age-based RTS,S')))
 
 none <- output %>%
   filter((seasonality %in% c('perennial', 'highly seasonal') & ITNboost==0 & RTSS=='none') |
