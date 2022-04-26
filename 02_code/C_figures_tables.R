@@ -2089,7 +2089,7 @@ scenarios %>%
   geom_vline(aes(xintercept=0), lty=2, color='darkgrey', size=.8) +
   geom_pointrange(aes(y=(scenario)*-1, x=estimate, xmin=lower, xmax=upper), alpha=0.7,
                   position = position_dodge(width = .2)) +
-  scale_color_manual(values = c('black',"#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+  scale_color_manual(values = c('black',"#EA7580","#1BB6AF","#F8CD9C","#088BBE")) +
   facet_grid(seasonality~scenario2_f, scales = 'free') +
   scale_x_continuous(limits = c(0, max(scenarios$upper)), breaks = scales::trans_breaks(identity, identity, n = 3)) +
   scale_shape_manual(values = c(19,17), guide = guide_legend(reverse = TRUE)) +
@@ -2115,11 +2115,13 @@ readRDS('./03_output/scenarios2_casestudy.rds') %>% ungroup() %>%
   pivot_wider(names_from = scenario_f, values_from = CE_daly) %>%
   write.table("clipboard", sep="\t")
 
+lacroix_palettes$Pamplemousse
+
 A <- readRDS('./03_output/scenarios2_casestudy.rds')  %>%
   ggplot(aes(color=scenario_f, group=scenario_f)) +
   geom_pointrange(aes(y=scenario*-1, x=CE_case, xmin=CE_case_lower, xmax=CE_case_upper), alpha=0.7) +
   geom_vline(xintercept = 0, lty=2, color='grey') +
-  scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+  scale_color_manual(values = c("#EA7580","#1BB6AF","#F8CD9C","#088BBE")) +
   scale_y_continuous(limits=c(-4.4, -0.5), breaks=c(-4,-3,-2,-1), labels = NULL) +
   facet_grid(seasonality~scenario2_f, scales = 'free') +
   labs(y='',
@@ -2157,7 +2159,7 @@ B <- scenarios %>%
   ggplot(aes(color=scenario_f)) +
   geom_vline(xintercept = 0, lty=2, color='grey') +
   geom_pointrange(aes(y=scenario*-1, x=equality, xmin=equality_lower, xmax=equality_upper), alpha=0.7) +
-  scale_color_manual(values = c("#EA7580","#1BB6AF","#F6A1A5","#088BBE")) +
+  scale_color_manual(values = c("#EA7580","#1BB6AF","#F8CD9C","#088BBE")) +
   facet_grid(seasonality~scenario2_f, scales = 'free') +
   scale_x_continuous(limits = c(min(scenarios$upper), max(scenarios$upper)), breaks = scales::trans_breaks(identity, identity, n = 3)) +
   scale_y_continuous(limits=c(-5.4, -1.5), breaks=c(-5,-4,-3,-2), labels = NULL) +
