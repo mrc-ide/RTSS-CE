@@ -72,8 +72,8 @@ ITNuse <- c(0,0.25, 0.50, 0.75)
 ITNboost <- c(0,1)
 resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
-treatment <- c(0.45)
-SMC <- c(0,0.85)
+treatment <- c(0.30, 0.45, 0.60)
+SMC <- c(0, 0.85)
 RTSS <- c("none", "EPI", "SV") # leave out hybrid for now
 RTSScov <- c(0, 0.85) # MVIP: dose 1 range 74-93%, dose 3 63-82%, dose 4 42-46%; first half of 2021
 fifth <- c(0) # only one booster for now
@@ -81,20 +81,21 @@ fifth <- c(0) # only one booster for now
 interventions <-
   crossing(ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth)
 
-name <- "test"
+name <- "general"
 
 # create combination of all runs and remove non-applicable scenarios
 combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
   mutate(name = paste0(name, "_", row_number())) %>%
-  filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set coverage when no RTSS
-  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) %>% # no 0 coverage & RTSS
-  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) %>% # no fifth doses with EPI or none
+  filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set RTSS coverage when there is no RTSS
+  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) %>% # cannot set 0% coverage if RTSS is implemented
+  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) %>% # no administration of fifth doses with EPI or no RTSS
+  filter(!(seas_name == "perennial" & (RTSS == 'SV' | RTSS == "hybrid"))) %>% # do not introduce seasonal vaccination in perennial settings
   filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
-  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always SMC in highly seasonal settings
-  filter(!(ITNuse == 0 & resistance != 0)) %>% # can't have resistance levels when ITNuse == 0
+  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always introduce SMC in highly seasonal settings
+  filter(!(ITNuse == 0 & resistance != 0)) %>% # do not introduce resistance when ITNuse==0
   filter(!(ITN == 'pbo' & resistance == 0)) %>% # only introduce PBO in areas that have resistance
-  filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # no boost AND PBO combinations
-  filter(!(ITN == 'pbo' & ITNuse == 0)) # can't switch to pbo with 0 net use
+  filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # cannot have ITN boost + ITN PBO
+  filter(!(ITN == 'pbo' & ITNuse == 0)) # cannot switch to PBO when ITNuse==0
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC/EIRestimates.rds")
@@ -129,13 +130,13 @@ combo <- combo %>% mutate(f = paste0("./03_output/HPC/",combo$name,".rds")) %>%
   filter(exist==0) %>%
   select(-f, -exist)
 
-t <- obj$enqueue_bulk(combo, runsimGF) # run 500 at a time [1:522,]
+t <- obj$enqueue_bulk(combo[1:2574,], runsimGF) # run 500 at a time [1:500,]
 t$status()
 
 beepr::beep(1)
 
 
-# ------------------------------------------------------------------------------
+# -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # test run by hand
 # x <- 4
 # test <- runsimGF(population = combo[[x,1]],
@@ -157,3 +158,4 @@ beepr::beep(1)
 #                  RTSScov = combo[[x,17]],
 #                  fifth = combo[[x,18]],
 #                  name = combo[[x,19]])
+# -#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
