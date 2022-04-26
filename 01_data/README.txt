@@ -1,5 +1,8 @@
 File list
 
+00_Pf_mortality_rate_table_Global_admin0_2000-2019.csv: 
+Pf mortality rate tables from malaria atlas project for the years 2000 to 2019
+
 00_PfPR_table_Global_admin0_2000-2019.csv: 
 PfPR tables from malaria atlas project for the years 2000 to 2019
 

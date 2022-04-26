@@ -322,6 +322,18 @@ runsimGF <- function(population,        # simulation population
 
   }
 
+  # correlate interventions  ----------
+  # correlations not working correctly with set.seed()
+  # correlations <- get_correlation_parameters(params)
+
+  # if (RTSScov == 0.77 & pfpr == 0.40) {
+  #   correlations$inter_intervention_rho('rtss', 'bednets', 0.04)
+  # }
+  #
+  # if (RTSScov == 0.72 & pfpr == 0.18) {
+  #   correlations$inter_intervention_rho('rtss', 'bednets', 0.07)
+  # }
+
   # EIR equilibrium ----------
   params <- set_equilibrium(params, as.numeric(starting_EIR))
 
@@ -330,8 +342,9 @@ runsimGF <- function(population,        # simulation population
 
   output <- run_simulation(
     timesteps = warmup + sim_length,
-    parameters = params,
-    correlations = NULL) %>%
+    # correlations = correlations,
+    parameters = params) %>%
+
     # add vars to output
     mutate(EIR = starting_EIR,
            warmup = warmup,
@@ -397,7 +410,7 @@ runsimGF <- function(population,        # simulation population
 
 # PfPR EIR match ---------------------------------------------------------------
 
-PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
+PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, treatment, name){
   # parameters
   year <- 365
   month <- year/12
@@ -430,7 +443,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
   params$phi_indoors <- c(0.96, 0.98, 0.97)
 
   params <- set_drugs(params, list(AL_params, SP_AQ_params))
-  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
+  params <- set_clinical_treatment(params, 1, c(1), treatment)
 
   if (seas_name == 'highly seasonal') {
   peak <- peak_season_offset(params)
@@ -486,6 +499,7 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
   params <- set_equilibrium(params, as.numeric(init_EIR))
 
   set.seed(123)
+
   output <- run_simulation(
     timesteps = 9 * year,
     parameters = params,
@@ -502,6 +516,121 @@ PRmatch <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
           'n_730_3650'
         ]
       )
+
+  # create dataframe of initial EIR, output EIR, and prev 2-10 results
+  EIR_prev <- cbind(seas_name, ITN, ITNuse, treatment, init_EIR, prev)
+
+  saveRDS(EIR_prev, paste0('./03_output/PR_EIR/', name,'.rds'))
+
+}
+
+# PR match for DHS data, microscopy prev for 5-59 months
+# changes from PRmatch include age group for prev calculations and smc coverage to 87%
+PRmatch_u5 <- function(seasonality, seas_name, init_EIR, ITN, ITNuse, name){
+  # parameters
+  year <- 365
+  month <- year/12
+  human_population <- 100000
+
+  params <- get_parameters(list(
+    human_population = human_population,
+    model_seasonality = TRUE,   # assign seasonality
+    g0 = unlist(seasonality)[1],
+    g = unlist(seasonality)[2:4],
+    h = unlist(seasonality)[5:7],
+    prevalence_rendering_min_ages = round(5 * month),
+    prevalence_rendering_max_ages = 5 * year,
+    individual_mosquitoes = FALSE))
+
+  flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
+  ages <- round(flat_demog$V3 * year) # top of age bracket
+  deathrates <- flat_demog$V5 / 365 # age-specific death rates
+  params <- set_demography(
+    params,
+    agegroups = ages,
+    timesteps = 1,
+    deathrates = matrix(deathrates, nrow = 1),
+    birthrates = find_birthrates(human_population, ages, deathrates)
+  )
+
+  params <- set_species(params, species = list(arab_params, fun_params, gamb_params),
+                        proportions = c(0.25, 0.25, 0.5))
+  params$phi_bednets <- c(0.9, 0.9, 0.89)
+  params$phi_indoors <- c(0.96, 0.98, 0.97)
+
+  params <- set_drugs(params, list(AL_params, SP_AQ_params))
+  params <- set_clinical_treatment(params, 1, c(1), c(0.45))
+
+  if (seas_name == 'highly seasonal') {
+    peak <- peak_season_offset(params)
+    first <- round(c(peak+c(-1,0,1,2)*month),0)
+    firststeps <- sort(rep(first, (9*year)/year))
+    yearsteps <- rep(c(0, seq(year, (9*year) - year, year)), length(first))
+    timesteps <- yearsteps + firststeps
+
+    params <- set_smc(
+      parameters = params,
+      drug = 2,
+      timesteps = sort(timesteps),
+      coverages = rep(.87, length(timesteps)),
+      min_age = round(0.25*year),
+      max_age = round(5*year))
+
+    params$drug_prophylaxis_scale <- c(10.6, 39.34)
+    params$drug_prophylaxis_shape <- c(11.3, 3.40)
+
+  }
+
+  # no resistance
+  dn0_1 <- case_when(ITN=='pyr' ~ 0.387,
+                     ITN=='pbo' ~ 0.517)
+
+  # no resistance
+  rn_1 <- case_when(ITN=='pyr' ~ 0.563,
+                    ITN=='pbo' ~ 0.474)
+
+  # no resistance
+  gamman_1 <- case_when(ITN=='pyr'~ 2.64,
+                        ITN=='pbo' ~ 2.64)
+
+  params <- set_bednets(
+    parameters = params,
+    timesteps = seq(1, 9*year, 3*year),
+    coverages = rep(ITNuse, 3),
+    retention = 3 * year,
+    dn0 = matrix(c(rep(dn0_1, 3),
+                   rep(dn0_1, 3),
+                   rep(dn0_1, 3)),
+                 nrow=3, ncol=3),
+    rn = matrix(c(rep(rn_1, 3),
+                  rep(rn_1, 3),
+                  rep(rn_1, 3)),
+                nrow=3, ncol=3),
+    rnm = matrix(c(rep(.24, 3),
+                   rep(.24, 3),
+                   rep(.24, 3)),
+                 nrow=3, ncol=3),
+    gamman = rep(gamman_1 * 365, 3))
+
+  params <- set_equilibrium(params, as.numeric(init_EIR))
+
+  set.seed(123)
+  output <- run_simulation(
+    timesteps = 9 * year,
+    parameters = params,
+    correlations = NULL)
+
+  # output prev 5-59 months values
+  prev <-
+    mean(
+      output[
+        output$timestep %in% seq(7 * year, 9 * year), # averaging a multiple of 3 for bednets
+        'n_detect_152_1825'
+      ] / output[
+        output$timestep %in% seq(7 * year, 9 * year),
+        'n_152_1825'
+      ]
+    )
 
   # create dataframe of initial EIR, output EIR, and prev 2-10 results
   EIR_prev <- cbind(seas_name, ITN, ITNuse, init_EIR, prev)
