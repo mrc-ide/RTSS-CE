@@ -1,21 +1,3 @@
-# Process HPC results
-require(data.table)
-library(tidyverse)
-
-data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/'
-
-
-# raw data ---------------------------------------------------------------------
-# pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
-dat_list <- lapply(files, function (x) readRDS(x))
-dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
-
-
-# pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
-file_list <- mapply(files, function (x) readRDS(x))
-
 
 dat_edit <- function(x){
 
