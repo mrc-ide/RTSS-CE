@@ -51,7 +51,7 @@ outcome_uncertainty <- function(x,
 
 # DALY components
 daly_components <- function(x,
-                            lifespan = 63,                   # average life expectancy
+                            lifespan = 64.49,                   # average life expectancy
                             episode_length = 0.01375,        # average length of clinical episode
                             severe_episode_length = 0.04795, # average length of severe episode
                             weight1 = 0.211,      # Disability weight age group 1
@@ -92,8 +92,6 @@ dalyoutput <- daly_components(dalyoutput)
 
 # check that there are no negative values
 summary(dalyoutput$yll)
-summary(dalyoutput[dalyoutput$yll==0,]$yll_lower)
-summary(dalyoutput[dalyoutput$yll==0,]$yll_upper)
 summary(dalyoutput$yld)
 
 # consolidate across ages
@@ -112,28 +110,22 @@ dalyoutput <- dalyoutput %>%
   select(-age, -age_upper, -age_lower) %>%
   distinct()
 
-# checks
-summary(dalyoutput$n_0_1825)
-summary(dalyoutput$u5_dalys)
 
 saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 
 
 # costing data------------------------------------------------------------------
-# costs
-# https://github.com/mrc-ide/gf/blob/master/data/unit_costs.rda
-# https://github.com/mrc-ide/gf/blob/master/data/treatment_unit_costs.rda
-load('./01_data/unit_costs.rda')
 
-#ITNs: https://www.thelancet.com/journals/lanplh/article/PIIS2542-5196(21)00296-5/fulltext
+# references in: https://mrc-ide.github.io/treasure/reference/index.html
+# treatment costs from Penny et al. 2016
 
-PYRcost <- 3.50        # $2.00 per net and $1.50 delivery cost
-PBOcost <- 3.80        # $2.30 per net and $1.50 delivery cost
-TREATcost <- 1.47      # clinical treatment cost
-SEVcost <- 22.41       # severe treatment cost
-SMCcost <- unit_costs$cost_per_smc_dose_delivered  # 1.44
-cost_per_dose <- c(2.69, 6.52, 12.91)
-delivery_cost <- c(0.96, 1.62, 2.67)
+PYRcost <- 2.52 + 1.50                # $2.52 per net and $1.50 delivery cost
+PBOcost <- 3.51 + 1.50                # $3.51 per net and $1.50 delivery cost
+TREATcost <- 1.47                     # clinical treatment cost
+SEVcost <- 22.41                      # severe treatment cost
+SMCcost <- 0.9075                     # per dose
+cost_per_dose <- c(2.69, 6.52, 12.91) # 2, 5, 10 w/ consumables cost
+delivery_cost <- 1.62                 # range c(0.96, 1.62, 2.67)
 
 # create combinations of dose cost and delivery cost
 rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
@@ -239,7 +231,7 @@ saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
 # assign scenarios -------------------------------------------------------------
 output <- dalyoutput_cost %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(cost_per_dose == 6.52) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, sep="_")) # create unique identifier
 
 # there should be 270 baseline scenarios. 3 pfpr x 3 seasonality x 4 ITN usage x 3 treatmet x 2.5 resistance (only pbo in resistance scenarios)
@@ -418,14 +410,16 @@ dalyoutput <- dalyoutput %>%
   distinct()
 
 # costing data
-load('./01_data/unit_costs.rda')
+# references in: https://mrc-ide.github.io/treasure/reference/index.html
+# treatment costs from Penny et al. 2016
 
-PYRcost <- 3.50        # $2.00 per net and $1.50 delivery cost
-TREATcost <- 1.47      # clinical treatment cost
-SEVcost <- 22.41       # severe treatment cost
-SMCcost <- unit_costs$cost_per_smc_dose_delivered  # 1.44
-cost_per_dose <- c(2.69, 6.52, 12.91)
-delivery_cost <- c(0.96, 1.62, 2.67)
+PYRcost <- 2.52 + 1.50                # $2.52 per net and $1.50 delivery cost
+PBOcost <- 3.51 + 1.50                # $3.51 per net and $1.50 delivery cost
+TREATcost <- 1.47                     # clinical treatment cost
+SEVcost <- 22.41                      # severe treatment cost
+SMCcost <- 0.9075                     # per dose
+cost_per_dose <- c(2.69, 6.52, 12.91) # 2, 5, 10 w/ consumables cost
+delivery_cost <- 1.62                 # range c(0.96, 1.62, 2.67)
 
 # create combinations of dose cost and delivery cost
 rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
@@ -481,7 +475,7 @@ dalyoutput_cost <- dalyoutput_cost %>%
 
 # assign scenarios
 output <- dalyoutput_cost %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(cost_per_dose == 6.52) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, sep="_")) # create unique identifier
 
 saveRDS(output, './03_output/scenarios_casestudy.rds')

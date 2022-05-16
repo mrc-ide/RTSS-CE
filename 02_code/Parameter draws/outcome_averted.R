@@ -36,7 +36,7 @@ outcome_averted <- function(x # dataframe to read in and process
   base_IDs <- none$file
 
   scenarios <- output %>% filter(!(file %in% base_IDs)) %>%
-    left_join(none %>% select(-file), by=c('ID', 'drawID', 'cost_per_dose')) %>%
+    left_join(none %>% select(-file, -scenario), by=c('ID', 'drawID', 'cost_per_dose')) %>%
 
     # calculate cost-effectiveness
     mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly),

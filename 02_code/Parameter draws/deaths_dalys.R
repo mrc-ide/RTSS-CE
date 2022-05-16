@@ -45,7 +45,7 @@ outcome_uncertainty <- function(x,
 # DALYs ------------------------------------------------------------------------
 
 daly_components <- function(x,
-                            lifespan = 63,                   # average life expectancy
+                            lifespan = 64.49,                   # average life expectancy
                             episode_length = 0.01375,        # average length of clinical episode
                             severe_episode_length = 0.04795, # average length of severe episode
                             weight1 = 0.211,      # disability weight age group 1
