@@ -35,14 +35,17 @@ cost_effectiveness <- function(x){ # input = index of file to process
            u5_severe = ifelse(age %in% c('0-91.25', '91.25-1825'), severe_cases, 0),
            u5_dalys = ifelse(age %in% c('0-91.25', '91.25-1825'), daly, 0)) %>%
 
-    mutate_at(vars(n, n_0_1825, n_91.25_1825, u5_cases, u5_severe, u5_dalys, inc_clinical:daly_lower), sum, na.rm=T) %>%  # condense outputs over all ages in population
+    mutate_at(vars(n, n_0_1825, n_91.25_1825,
+                   u5_cases, u5_severe, u5_dalys,
+                   inc_clinical, inc_severe,
+                   cases, cases_lower, cases_upper, severe_cases,
+                   deaths, deaths_lower, deaths_upper,
+                   yll:daly_lower), sum, na.rm=T) %>%  # condense outputs over all ages in population
     select(-age, -age_upper, -age_lower) %>%
     distinct()
 
   # add costs (intervention-specific and total) ----
   output <- add_costs(output)
-
-  output$file <- files[x]
 
   print(x)
 
@@ -55,7 +58,6 @@ dalyoutput <- map_dfr(index, cost_effectiveness)
 
 # save output
 saveRDS(dalyoutput, './03_output/test_dalyoutput.rds')
-
 
 # calculate cases / DALYs averted
 output <- outcome_averted(dalyoutput)
@@ -102,8 +104,6 @@ test$severe_cases; test$severe_baseline
 
 
 #------------------------------------------------------------------------------#
-
-eec39b7aad0a69dba8fa5f2fec72738c
 
 
 # Case-study -------------------------------------------------------------------

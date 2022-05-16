@@ -21,8 +21,8 @@ add_costs <- function(x # dataframe to read in and process
   # create combinations of dose cost and delivery cost
   rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
 
-  population <- x$population
-  sim_length <- x$sim_length
+  population <- x$population[1]
+  sim_length <- x$sim_length[1]
 
   # Prepare to add costs to dataset
   dalyoutput_cost <- x %>%
