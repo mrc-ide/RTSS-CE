@@ -45,6 +45,7 @@ DHS_nets*.rds
 *DHS_data*
 rdhs.json
 DHS_pass.txt
+rdhs*
 
 # Misc
-C_figures_tables (old)*
+old_files
