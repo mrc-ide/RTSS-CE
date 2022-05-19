@@ -11,7 +11,7 @@ PR <- read_csv('./01_data/00_PfPR_table_Global_admin0_2000-2019.csv') %>%
 
 # pull in ITN coverage by country
 # https://github.com/bertozzivill/map-itn-cube/blob/publication-2021/paper_figures/figure_data/fig_4_access_npc.csv
-ITN <- read_csv('./01_data/fig_4_access_npc.csv') %>%
+ITN <- read.csv('https://raw.githubusercontent.com/bertozzivill/map-itn-cube/publication-2021/paper_figures/figure_data/fig_4_access_npc.csv') %>%
   group_by(iso3) %>%
   summarize(access_mean = mean(access_mean, na.rm=T))
 
@@ -29,3 +29,4 @@ ggplot(output, aes(x=PfPR_rmean, y=access_mean)) +
 
 # save
 ggsave("./03_output/PR_ITN_dist.pdf", width=5, height=5)
+
