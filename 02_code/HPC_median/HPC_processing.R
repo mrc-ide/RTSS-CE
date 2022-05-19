@@ -7,7 +7,7 @@ data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS
 
 # raw data ---------------------------------------------------------------------
 # pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
+files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC_median/", pattern = "general_*", full.names = TRUE)
 dat_list <- lapply(files, function (x) readRDS(x))
 dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
 
@@ -66,7 +66,7 @@ dat3 <- dat2 %>%
          age = gsub('_', '-', age)) %>%
   group_by(file, age) %>%
   select(-value) %>%
-  mutate_at(vars(inc_clinical:n), sum, na.rm = TRUE) %>% # consolidate
+  mutate_at(vars(n, inc_clinical, inc_severe), sum, na.rm = TRUE) %>% # consolidate
   distinct() %>% ungroup()
 
 # save
