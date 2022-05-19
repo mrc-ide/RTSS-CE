@@ -168,7 +168,7 @@ if(season=='seasonal'){
   }
 
   if(season=='highly seasonal'){
-    colors <- c('#1F78B4', '#33A02C', '#A6CEE3')
+    colors <- c('#1F78B4', '#B2DF8A', '#33A02C', '#A6CEE3')
   }
 
   if(season=='seasonal'){
@@ -179,7 +179,7 @@ if(season=='seasonal'){
  B <- output %>%
     # filter out mixed strategies
     group_by(ID) %>% arrange(ID, deltacost) %>%
-    filter(deltadaly >= 0 & deltacost > 0) %>%
+    filter(!(deltadaly < 0 & deltacost > 0)) %>%
     # filter out dominated strategies
     mutate(dominate = case_when(deltadaly < lag(deltadaly,n=12L) ~ 1,
                                 deltadaly < lag(deltadaly,n=11L) ~ 1,
@@ -343,7 +343,7 @@ deltaseason('perennial')
   B <- output %>%
     # filter out mixed strategies
     group_by(ID) %>% arrange(ID, deltacost) %>%
-    filter(deltadaly >= 0 & deltacost > 0) %>%
+    filter(!(deltadaly < 0 & deltacost > 0)) %>%
     # filter out dominated strategies
     mutate(dominate = case_when(deltadaly < lag(deltadaly,n=12L) ~ 1,
                                 deltadaly < lag(deltadaly,n=11L) ~ 1,
