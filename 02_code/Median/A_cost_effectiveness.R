@@ -234,11 +234,11 @@ dalyoutput_cost <- dalyoutput_cost %>%
  # ITN linear
  cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,
  # non-severe treatment
- cost_clinical = ((cases - severe_cases - u5_cases) * treatment * TREATcost_adult) * .77 +
-   ((u5_cases - u5_severe) * treatment * TREATcost_child) * .77,
+ cost_clinical = ((cases - severe_cases - u5_cases) * treatment * TREATcost_adult) * .77 + # adult
+   ((u5_cases - u5_severe) * treatment * TREATcost_child) * .77, # child
  # severe treatment
- cost_severe = (severe_cases * treatment * SEVcost_adult) * .77 +
-   (u5_severe * treatment * SEVcost_child) * .77,
+ cost_severe = (severe_cases * treatment * SEVcost_adult) * .77 + # adult
+   (u5_severe * treatment * SEVcost_child) * .77, # child
  # SMC
  cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,
  # RTSS
