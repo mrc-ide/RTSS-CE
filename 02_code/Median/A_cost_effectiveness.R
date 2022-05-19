@@ -16,6 +16,12 @@ dalyoutput <- readRDS("./03_output/rtss_long.rds") %>%
          cases = inc_clinical,
          severe_cases = inc_severe)
 
+dalyoutput2 <- filter(dalyoutput, pfpr == 0.4, seasonality == "seasonal",
+                     ITNuse == 0.5, treatment == 0.45, resistance == 0.4,
+                     ITNboost == 0, SMC == 0, RTSScov == 0, ITN == "pyr",
+                     RTSS == 'none')
+
+
 # make sure age is in years for calculating DALYs
 summary(dalyoutput$age_lower); summary(dalyoutput$age_upper)
 
