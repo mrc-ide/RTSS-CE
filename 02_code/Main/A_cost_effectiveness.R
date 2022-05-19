@@ -1,7 +1,9 @@
 # Cost effectiveness -----------------------------------------------------------
 library(tidyverse)
 library(netz)
+library(treasure)
 # devtools::install_github("mrc-ide/netz@usage_to_npc") # preliminary version
+# devtools::install_github("mrc-ide/treasure")
 
 
 # pull in data from simulation runs (all interventions)
@@ -119,17 +121,34 @@ saveRDS(dalyoutput, './03_output/dalyoutput.rds')
 # references in: https://mrc-ide.github.io/treasure/reference/index.html
 # treatment costs from Penny et al. 2016
 
-PYRcost <- 2.52 + 1.50                # $2.52 per net and $1.50 delivery cost
-PBOcost <- 3.51 + 1.50                # $3.51 per net and $1.50 delivery cost
-TREATcost <- 1.47                     # clinical treatment cost
-SEVcost <- 22.41                      # severe treatment cost
-SMCcost <- 0.9075                     # per dose
-cost_per_dose <- c(2.69, 6.52, 12.91) # 2, 5, 10 w/ consumables cost
-delivery_cost <- 1.62                 # range c(0.96, 1.62, 2.67)
+PYRcost <- 2.52 + 1.50                # pyrethroid $2.52 per net and $1.50 delivery cost
+PBOcost <- 3.51 + 1.50                # PBO $3.51 per net and $1.50 delivery cost
+
+SMCcost <- 0.9075                     # SMC $0.9075 per dose
+
+cost_per_dose <- c(2.69, 6.52, 12.91) # RTS,S per dose $2, $5, $10 + consumables cost
+delivery_cost <- 1.62                 # RTS,S delivery cost range c(0.96, 1.62, 2.67)
 
 # create combinations of dose cost and delivery cost
 rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
 
+RDT <- 0.46 + (0.46 * 0.15)           # RDT $0.46 unit cost + (unit cost * 15% delivery markup)
+AL_adult <- 0.3 * 24                  # $7.2 clinical treatment cost ($0.3 * 24 doses)
+AL_child <- 0.3 * 12                  # $3.6 clinical treatment cost ($0.3 * 12 doses)
+
+outpatient <- 1.87                    # (Median WHO Choice cost for SSA)
+inpatient <- 8.71                    # (Median WHO Choice cost for SSA, assuming average duration of stay of 3 days)
+
+# clinical: RDT cost + Drug course cost + facility cost (outpatient)
+TREATcost_adult <- RDT + AL_adult + outpatient
+TREATcost_child <- RDT + AL_child + outpatient
+
+# severe: RDT cost + Drug course cost + facility cost (inpatient)
+SEVcost_adult <- RDT + AL_adult + inpatient
+SEVcost_child <- RDT + AL_child + inpatient
+
+
+# population and simulation length
 population <- dalyoutput$population[[1]]
 sim_length <- dalyoutput$sim_length[[1]]
 
@@ -205,25 +224,41 @@ dalyoutput_cost <- dalyoutput_cost %>%
             by=c('ITNuse2' = 'target_use')) %>%
   mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
                                                     annual_percapita_nets_distributed),
+ # calculate cost of interventions
+ # true net cost accounting for non-linear relationship
+ cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,
+ # true net cost MIN
+ cost_ITNmin = population * annual_percapita_nets_distmin * sim_length/365 * ITNcost,
+ # true net cost MAX
+ cost_ITNmax = population * annual_percapita_nets_distmax * sim_length/365 * ITNcost,
+ # ITN linear
+ cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,
+ # non-severe treatment
+ cost_clinical = ((cases - severe_cases - u5_cases) * treatment * TREATcost_adult) * .77 +
+   ((u5_cases - u5_severe) * treatment * TREATcost_child) * .77,
+ # severe treatment
+ cost_severe = (severe_cases * treatment * SEVcost_adult) * .77 +
+   (u5_severe * treatment * SEVcost_child) * .77,
+ # SMC
+ cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,
+ # RTSS
+ cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost),
 
-         # calculate cost of interventions
-         cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
-         cost_ITNmin = population * annual_percapita_nets_distmin * sim_length/365 * ITNcost,  # true net cost MIN
-         cost_ITNmax = population * annual_percapita_nets_distmax * sim_length/365 * ITNcost,  # true net cost MAX
-         cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,          # ITN linear
-         cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
-         cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
-         cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
-         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
+ # TOTAL
+ cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax,
+ cost_total_ITNmin = cost_ITNmin + cost_clinical + cost_severe + cost_SMC + cost_vax,
+ cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax,
 
-         cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax, # TOTAL
-         cost_total_ITNmin = cost_ITNmin + cost_clinical + cost_severe + cost_SMC + cost_vax,
-         cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax,
-         # cost just among children
-         cost_total_u5 = n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost + # cost ITNs
-           ((u5_cases-u5_severe) * treatment * TREATcost)*.77 + # cost clinical
-           (u5_severe * treatment * SEVcost)*.77 +  # cost severe
-           cost_SMC + cost_vax) # cost SMC and cost VAX are all among children
+ # cost just among children
+ cost_total_u5 =
+   # cost ITNs
+   n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost +
+   # cost clinical
+   ((u5_cases-u5_severe) * treatment * TREATcost_child)*.77 +
+   # cost severe
+   (u5_severe * treatment * SEVcost_child)*.77 +
+   # cost SMC and cost VAX are all among children
+   cost_SMC + cost_vax)
 
 saveRDS(dalyoutput_cost, './03_output/dalyoutput_cost.rds')
 
@@ -413,16 +448,31 @@ dalyoutput <- dalyoutput %>%
 # references in: https://mrc-ide.github.io/treasure/reference/index.html
 # treatment costs from Penny et al. 2016
 
-PYRcost <- 2.52 + 1.50                # $2.52 per net and $1.50 delivery cost
-PBOcost <- 3.51 + 1.50                # $3.51 per net and $1.50 delivery cost
-TREATcost <- 1.47                     # clinical treatment cost
-SEVcost <- 22.41                      # severe treatment cost
-SMCcost <- 0.9075                     # per dose
-cost_per_dose <- c(2.69, 6.52, 12.91) # 2, 5, 10 w/ consumables cost
-delivery_cost <- 1.62                 # range c(0.96, 1.62, 2.67)
+PYRcost <- 2.52 + 1.50                # pyrethroid $2.52 per net and $1.50 delivery cost
+PBOcost <- 3.51 + 1.50                # PBO $3.51 per net and $1.50 delivery cost
+
+SMCcost <- 0.9075                     # SMC $0.9075 per dose
+
+cost_per_dose <- c(2.69, 6.52, 12.91) # RTS,S per dose $2, $5, $10 + consumables cost
+delivery_cost <- 1.62                 # RTS,S delivery cost range c(0.96, 1.62, 2.67)
 
 # create combinations of dose cost and delivery cost
 rtsscost_df <- expand_grid(cost_per_dose = cost_per_dose, delivery_cost = delivery_cost)
+
+RDT <- 0.46 + (0.46 * 0.15)           # RDT $0.46 unit cost + (unit cost * 15% delivery markup)
+AL_adult <- 0.3 * 24                  # $7.2 clinical treatment cost ($0.3 * 24 doses)
+AL_child <- 0.3 * 12                  # $3.6 clinical treatment cost ($0.3 * 12 doses)
+
+outpatient <- 1.87                    # (Median WHO Choice cost for SSA)
+inpatient <- 8.71                    # (Median WHO Choice cost for SSA, assuming average duration of stay of 3 days)
+
+# clinical: RDT cost + Drug course cost + facility cost (outpatient)
+TREATcost_adult <- RDT + AL_adult + outpatient
+TREATcost_child <- RDT + AL_child + outpatient
+
+# severe: RDT cost + Drug course cost + facility cost (inpatient)
+SEVcost_adult <- RDT + AL_adult + inpatient
+SEVcost_child <- RDT + AL_child + inpatient
 
 population <- dalyoutput$population[[1]]
 sim_length <- dalyoutput$sim_length[[1]]
@@ -463,15 +513,43 @@ nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_j
 dalyoutput_cost <- dalyoutput_cost %>%
   left_join(nets_distributed,
             by=c('ITNuse2' = 'target_use')) %>%
-  mutate(
+  mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
+                                                    annual_percapita_nets_distributed),
          # calculate cost of interventions
-         cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,  # true net cost accounting for non-linear relationship
-         cost_clinical = ((cases-severe_cases) * treatment * TREATcost)*.77, # non-severe treatment
-         cost_severe = (severe_cases * treatment * SEVcost)*.77,             # severe treatment
-         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost), # RTSS
-         cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,                      # SMC
+         # true net cost accounting for non-linear relationship
+         cost_ITN = population * annual_percapita_nets_distributed * sim_length/365 * ITNcost,
+         # true net cost MIN
+         cost_ITNmin = population * annual_percapita_nets_distmin * sim_length/365 * ITNcost,
+         # true net cost MAX
+         cost_ITNmax = population * annual_percapita_nets_distmax * sim_length/365 * ITNcost,
+         # ITN linear
+         cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,
+         # non-severe treatment
+         cost_clinical = ((cases - severe_cases - u5_cases) * treatment * TREATcost_adult) * .77 +
+           ((u5_cases - u5_severe) * treatment * TREATcost_child) * .77,
+         # severe treatment
+         cost_severe = (severe_cases * treatment * SEVcost_adult) * .77 +
+           (u5_severe * treatment * SEVcost_child) * .77,
+         # SMC
+         cost_SMC = n_91.25_1825 * SMC * SMCcost * smc_timesteps,
+         # RTSS
+         cost_vax = (dose1 + dose2 + dose3 + dose4) * (cost_per_dose + delivery_cost),
 
-         cost_total = cost_ITN + cost_clinical + cost_severe + cost_vax + cost_SMC)
+         # TOTAL
+         cost_total = cost_ITN + cost_clinical + cost_severe + cost_SMC + cost_vax,
+         cost_total_ITNmin = cost_ITNmin + cost_clinical + cost_severe + cost_SMC + cost_vax,
+         cost_total_ITNmax = cost_ITNmax + cost_clinical + cost_severe + cost_SMC + cost_vax,
+
+         # cost just among children
+         cost_total_u5 =
+           # cost ITNs
+           n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost +
+           # cost clinical
+           ((u5_cases-u5_severe) * treatment * TREATcost_child)*.77 +
+           # cost severe
+           (u5_severe * treatment * SEVcost_child)*.77 +
+           # cost SMC and cost VAX are all among children
+           cost_SMC + cost_vax)
 
 # assign scenarios
 output <- dalyoutput_cost %>%
