@@ -10,16 +10,26 @@ options(didehpc.cluster = "fi--didemrchnb",
 
 src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
 
+sources <- c('./02_code/HPC_draws/functions_draws.R',               # parameter draw runs
+             './02_code/HPC_draws/Processing/HPC_processing.R',     # one line per age group
+             './02_code/HPC_draws/Processing/deaths_dalys.R',       # calc deaths & dalys
+             './02_code/HPC_draws/Processing/add_costs.R',          # add cost estimates
+             './02_code/HPC_draws/Processing/outcome_averted.R',    # cases & dalys averted
+             './02_code/HPC_draws/Processing/cost_effectiveness.R') # calc CE
+
 ctx <- context::context_save(path = "Q:/contexts",
-                             sources = c('./02_code/HPC_draws/functions_draws.R'),
-                             packages = c("dplyr", "malariasimulation"),
+                             sources = sources,
+                             packages = c("dplyr", "malariasimulation", "purrr", "tidyr"),
                              package_sources = src)
 
 share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/homes/htopazia', "M:")
+
+# template choices: "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core" or "32Core"
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
                                   cluster = "fi--didemrchnb",
+                                  template = "32Core",
                                   parallel = FALSE)
 
 # obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
@@ -66,8 +76,8 @@ sim_length <- 15*year
 
 # interventions
 ITN <- c('pyr', 'pbo')
-ITNuse <- c(0,0.25, 0.50, 0.75)
-ITNboost <- c(0,1)
+ITNuse <- c(0, 0.25, 0.50, 0.75)
+ITNboost <- c(0, 1)
 resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
 treatment <- c(0.30, 0.45, 0.60)
@@ -135,8 +145,8 @@ index <- crossing(x)
 
 # remove ones that have already been run
 index <- index %>% mutate(f = paste0("./03_output/HPC/general_", index$x, ".rds")) %>%
-  mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
-  filter(exist==0) %>%
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
+  filter(exist == 0) %>%
   select(-f, -exist)
 
 # run a test with the first scenario
@@ -160,4 +170,52 @@ map2_dfr(seq(0, nrow(index) - 100, 100),
 
 
 
+# Processing -------------------------------------------------------------------
+
+# read in all parameter draw runs and process
+t <- obj$enqueue(cost_effectiveness(1))
 t$status()
+
+obj <- didehpc::queue_didehpc(ctx, config = config)
+
+
+# data checks ##################################################################
+# save output
+readRDS('./03_output/dalyoutput_draws.rds')
+
+
+# save output
+readRDS('./03_output/scenarios_draws.rds')
+# check prevalence values
+
+none <- output %>%
+  filter(ITNboost==0 & ITN=='pyr' & RTSS=='none' & # filter out interventions
+           (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  mutate(PR = n_detect_730_3650 / n_730_3650) %>%
+  mutate(PRdiff = pfpr - PR)
+
+summary(test$PRdiff)
+
+# check that there are no negative DALY values
+if(any(output$yll < 0) | any(output$yld < 0)){
+  stop("DALYs must be greater than 0")
+}
+
+# RTSS doses are stable
+table(output$RTSS, output$RTSScov, output$rtss_mass_timesteps)
+
+# SMC doses are stable
+table(output$seasonality, output$smc_timesteps)
+
+# ITNs are stable
+table(output$ITNuse, output$bednet_timesteps)
+
+# DALYs averted dist
+test <- output %>% mutate(deltadaly = daly_baseline - daly)
+summary(test$deltadaly)
+test <- test %>% filter(deltadaly < 0 & resistance == 0)
+table(test$resistance) # all negative DALYs are in resistance scenarios
+test$deaths; test$deaths_baseline
+test$cases; test$cases_baseline
+test$severe_cases; test$severe_baseline
+

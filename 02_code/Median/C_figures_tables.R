@@ -653,7 +653,7 @@ ggplot(output2) +
        x='RTS,S cost per dose (USD)'
   ) +
   scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 15)) +
-  coord_cartesian(xlim = c(-5, 15), ylim = c(0, 100))
+  coord_cartesian(xlim = c(0, 13), ylim = c(0, 100))
 
 ggsave('./03_output/RTSS_price_dist_lineplot.pdf', width=6, height=4)
 
@@ -1068,7 +1068,7 @@ summary(output2$deltacases / (2*15)) # additional cases averted per year in a po
 summary(output2$CE_u5) # additional cases averted per year in a population of 100,000 people
 
 ggplot(data = output2) +
-  geom_boxplot(aes(x=pfpr, y=deltadaly / (2*15), fill=as.factor(pfpr), color=as.factor(pfpr), group=pfpr), alpha = 0.3, show.legend = F) +
+  geom_boxplot(aes(x=pfpr, y=deltadaly / (2*15), alpha = 0.3, group = pfpr), show.legend = F, fill = '#619CFF', color = '#619CFF') +
   facet_grid(~factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) +
   labs(x = 'PfPR', y = 'DALYs averted', title = 'DALYS averted per year per 100,000 people') +
   theme_classic()
