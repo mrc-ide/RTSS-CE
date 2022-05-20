@@ -525,17 +525,15 @@ ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=i
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 5.5, lty=2, color='grey') +
   geom_boxplot(alpha=0.3) +
-  coord_cartesian(ylim=c(-1, 35), clip="off") +
+  coord_cartesian(ylim=c(-1, 60), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " cases")),
        fill = 'intervention',
-       color = 'intervention',
-       caption=paste0('range in cost / cases: ', round(min(scenarios$CE_case, na.rm = T)), ' to ', round(max(scenarios$CE_case, na.rm=T)))) +
-  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-4,ymax=-4) +
-  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-4,ymax=-4) +
+       color = 'intervention') +
+  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-6,ymax=-6) +
+  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-6,ymax=-6) +
   scale_x_continuous(breaks=c(0)) +
-  theme_classic() +
-  theme(plot.caption.position = "plot")
+  theme_classic()
 
 ggsave('./03_output/box_whisker_CE_cases.pdf', width=10, height=5)
 
