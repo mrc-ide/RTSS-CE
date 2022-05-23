@@ -1,11 +1,30 @@
 # Figures & Tables -------------------------------------------------------------
 # packages
-library(sf)
 library(tidyverse)
 library(data.table)
 library(patchwork)
 library(grid)
 library(LaCroixColoR)
+
+# color palette
+# lacroix_palette(type = "paired")
+# c("#C70E7B", "#FC6882","#007BC3","#54BCD1","#EF7C12","#F4B95A","#009F3F","#8FDA04",
+#   "#AF6125","#F4E3C7","#B25D91","#EFC7E6", "#EF7C12","#F4B95A")
+# RColorBrewer::display.brewer.pal(12, "Paired")
+
+# assign scenarios colors
+smc <- "#FC6882"
+pbo <- "#007BC3"
+itn <- "#54BCD1"
+rtss_sv <- "#009F3F"
+rtss_age <- "#54E356"
+pbo_smc <- "#C70E7B"
+itn_smc <- "#B25D91"
+rtss_smc <- "#EFC7E6"
+pbo_rtss_smc <- "#AF6125"
+itn_rtss_smc <- "#F5DD42"
+pbo_rtss <- "#EF7C12"
+itn_rtss <- "#F4B95A"
 
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
@@ -91,7 +110,7 @@ ggplot(data = none) + # %>% filter(seasonality != 'perennial')
   scale_color_manual(values = c('#1BB6AF','#088BBE','#F6A1A5')) +
   theme_classic()
 
-ggsave('./03_output/seasonality_2yr.pdf', width=8, height=3)
+ggsave('./03_output/plots_median/seasonality_2yr.pdf', width=8, height=3)
 
 
 # check that clinical incidence among children meets the policy recommendation of clinical incidence >= 0.1 in the age-group
@@ -126,27 +145,17 @@ deltaseason <- function(season) {
   # All interventions, by baseline ITNuse and seasonality
   output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','RTS,S SV','ITN 10% boost + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% boost + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
-  RColorBrewer::brewer.pal(12, "Paired")
-  # colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
-  # ITN 10% boost #1F78B4
-  # RTSS EPI #B2DF8A
-  # RTSS SV #33A02C
-  # SMC #FB9A99
-  # ITN 10% boost + RTSS #A6CEE3
-  # ITN 10% boost + SMC  #E31A1C
-  # RTSS + SMC 'deeppink'
-  # ITN 10% boost + RTSS + SMC #6A3D9A
-
+# assign colors
 if(season=='perennial'){
-    colors <- c('#1F78B4', '#B2DF8A', '#A6CEE3')
+    colors <- c(itn, rtss_age, itn_rtss)
 }
 
 if(season=='highly seasonal'){
-  colors <- c('#1F78B4', '#B2DF8A', '#33A02C', '#A6CEE3')
+  colors <- c(itn, rtss_age, rtss_sv, itn_rtss)
 }
 
 if(season=='seasonal'){
-    colors <- c('#1F78B4',  '#B2DF8A', '#33A02C', '#FB9A99', '#A6CEE3', '#E31A1C',  'deeppink', '#6A3D9A')
+    colors <- c(itn, rtss_age, rtss_sv, smc, itn_rtss, itn_smc, rtss_smc, itn_rtss_smc)
 }
 
   A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
@@ -164,15 +173,15 @@ if(season=='seasonal'){
          color='intervention')
 
   if(season=='perennial'){
-    colors <- c('#1F78B4', '#B2DF8A', '#A6CEE3')
+    colors <- c(itn, rtss_age, itn_rtss)
   }
 
   if(season=='highly seasonal'){
-    colors <- c('#1F78B4', '#B2DF8A', '#33A02C', '#A6CEE3')
+    colors <- c(itn, rtss_age, rtss_sv, itn_rtss)
   }
 
   if(season=='seasonal'){
-    colors <- c('#1F78B4', '#FB9A99', '#E31A1C',  'deeppink', '#6A3D9A')
+    colors <- c(itn, smc, itn_smc, rtss_smc, itn_rtss_smc)
   }
 
   # removing dominated strategies
@@ -291,7 +300,7 @@ if(season=='seasonal'){
   A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
  # ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=10, height=6)
- ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=12, height=5)
+ ggsave(paste0('./03_output/plots_median/impact_cloud_',season,'.pdf'), width=12, height=5)
 
 }
 
@@ -312,18 +321,9 @@ deltaseason('perennial')
   # All interventions, by baseline ITNuse and seasonality
   output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% increase','ITN PBO','RTS,S age-based','RTS,S seasonal','ITN 10% increase + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% increase + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
-  RColorBrewer::brewer.pal(12, "Paired")
-  # colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
-  # ITN 10% boost #1F78B4
-  # RTSS EPI #B2DF8A
-  # RTSS SV #33A02C
-  # SMC #FB9A99
-  # ITN 10% boost + RTSS #A6CEE3
-  # ITN 10% boost + SMC  #E31A1C
-  # RTSS + SMC 'deeppink'
-  # ITN 10% boost + RTSS + SMC #6A3D9A
 
-    colors <- c('#1F78B4',  '#B2DF8A', '#33A02C', '#FB9A99', '#A6CEE3', '#E31A1C',  'deeppink', '#6A3D9A')
+    colors <- c(itn, rtss_age, rtss_sv, smc, itn_rtss, itn_smc, rtss_smc, itn_rtss_smc)
+
 
   A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
     geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5, alpha=0.2) +
@@ -454,7 +454,7 @@ deltaseason('perennial')
 
   A + B + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-  ggsave(paste0('./03_output/impact_cloud_all.pdf'), width=12, height=7)
+  ggsave(paste0('./03_output/plots_median/impact_cloud_all.pdf'), width=12, height=7)
 
 
 # box and whisker delta cost / delta daly --------------------------------------
@@ -500,11 +500,13 @@ ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=interv
        color = 'intervention') +
   annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-150,ymax=-150) +
   annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-150,ymax=-150) +
+  scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
+  scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
   scale_x_continuous(breaks=c(0)) +
   theme_classic() +
   theme(plot.caption.position = "plot")
 
-ggsave('./03_output/box_whisker_CE.pdf', width=10, height=5)
+ggsave('./03_output/plots_median/box_whisker_CE.pdf', width=10, height=5)
 
 
 # plotting with cost per cases averted
@@ -535,7 +537,7 @@ ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=i
   scale_x_continuous(breaks=c(0)) +
   theme_classic()
 
-ggsave('./03_output/box_whisker_CE_cases.pdf', width=10, height=5)
+ggsave('./03_output/plots_median/box_whisker_CE_cases.pdf', width=10, height=5)
 
 
 
@@ -596,7 +598,7 @@ ggplot(output) +
   coord_cartesian(ylim = c(-15,15)) +
   theme(plot.caption.position = "plot")
 
-ggsave('./03_output/RTSS_price_dist_all.pdf', width=6, height=4)
+ggsave('./03_output/plots_median/RTSS_price_dist_all.pdf', width=6, height=4)
 
 
 # table
@@ -653,156 +655,27 @@ ggplot(output2) +
   scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 15)) +
   coord_cartesian(xlim = c(0, 13), ylim = c(0, 100))
 
-ggsave('./03_output/RTSS_price_dist_lineplot.pdf', width=6, height=4)
-
-
-
-# ITN dist vs ITN use ----------------------------------------------------------
-# relationship between cost_ITN_linear and cost_ITN:
-# read in netz package data to find the annual nets to distribute to give the simulated usage
-nets_data <- netz::prepare_data()
-
-# get nets to be distributed for each ITN usage
-ndist <- function(x) {
-
-  convert_usage_to_annual_nets_distributed(
-    target_usage = seq(0,0.85,0.05),
-    distribution_freq = 1095, # 3 years
-    use_rate_data = x,
-    half_life_data = median(nets_data$half_life_data$half_life),
-    extrapolate_npc = "loess",
-    net_loss_function = net_loss_map) %>%
-    select(target_use, annual_percapita_nets_distributed)
-
-}
-
-# assume maximum observed use rate and median bednet half life (across Africa)
-nets_distributed <- ndist(0.88)
-
-# assume observed rate is the min in Africa
-nets_distributed_min <- ndist(min(nets_data$use_rate_by_country$use_rate))
-nets_distributed_min <- rename(nets_distributed_min, annual_percapita_nets_distmin = annual_percapita_nets_distributed)
-
-# assume observed rate is the max in Africa
-nets_distributed_max <- ndist(max(nets_data$use_rate_by_country$use_rate))
-nets_distributed_max <- rename(nets_distributed_max, annual_percapita_nets_distmax = annual_percapita_nets_distributed)
-
-nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max)
-net <- c('pyrethroid', 'pyrethroid + PBO')
-output <- crossing(nets_distributed, net)
-
-output <- output %>%
-  mutate(ITNcost = case_when(net=='pyrethroid' ~ 3.50,            # $2.00 per net and $1.50 delivery cost
-                             net=='pyrethroid + PBO' ~ 3.80)) %>% # $2.30 per net and $1.50 delivery cost
-  mutate(cost_ITN = annual_percapita_nets_distributed * ITNcost * 3,  # true net cost accounting for non-linear relationship
-         cost_ITNmin = annual_percapita_nets_distmin * ITNcost * 3,  # true net cost MIN
-         cost_ITNmax = annual_percapita_nets_distmax * ITNcost * 3,  # true net cost MAX
-         cost_ITNmin = ifelse(is.na(cost_ITNmin), cost_ITN, cost_ITNmin),
-         cost_ITN_linear = target_use * ITNcost)         # ITN linear
-
-output2 <- output %>%
-  filter((net=='pyrethroid' & round(target_use,2) %in% c(0.25, 0.35, 0.50, 0.60, 0.75, 0.85)) |
-           (net=='pyrethroid + PBO' & round(target_use,2) %in% c(0.25, 0.5, 0.75))) %>%
-  mutate(shape='sim')
-
-# plot
-ggplot(output, aes(x=cost_ITN_linear, y = cost_ITN, color=target_use)) +
-  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=4, color='chartreuse1', fill='chartreuse1') +
-  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=3.5, color='chartreuse1', fill='chartreuse1')+
-  geom_abline(slope=1, size=1, lty=2, alpha=0.3) +
-  geom_point(size=2) +
-  geom_line(alpha=0.5, size=1) +
-  geom_ribbon(aes(ymin=cost_ITNmin, ymax=cost_ITNmax), color=NA, fill='cornflower blue', alpha=0.4) +
-  scale_color_gradient(limits=c(0,0.85)) +
-  scale_shape_manual(values=c(1), labels=c('value used in simulation')) +
-  facet_grid(~net) +
-  labs(x='Linear ITN cost', y='Netz ITN cost', color='target ITN use', shape='') +
-  theme_bw()
-
-ggsave('./03_output/ITN_netz.pdf', width=8, height=4)
-
-
-# PfPR by country --------------------------------------------------------------
-nets_data <- read_csv('./01_data/Intervention_ITN.csv')
-
-PR <- read_csv('./01_data/00_PfPR_table_Global_admin0_2000-2019.csv') %>%
-  filter(Year == 2019) %>% arrange(PfPR_median) %>%
-  mutate(SSA = case_when(Name_0 %in% nets_data$Name ~ 1,
-                         grepl('Cape|Comor|Ivoire|Lesotho|Maurit|Tome|Seyc|Tanz', Name_0) ~ 1)) %>%
-  filter(SSA == 1) %>%
-  mutate(Name_f = factor(Name_0, levels=Name_0))
-
-
-lacroix_palettes$Pamplemousse
-
-ggplot(PR) +
-  geom_rect(xmin=1, xmax=49, ymin=0.09, ymax=.11, fill="#F6A1A5", alpha=0.009) +
-  geom_rect(xmin=1, xmax=49, ymin=.19, ymax=.21, fill="#F8CD9C", alpha=0.01) +
-  geom_rect(xmin=1, xmax=49, ymin=.39, ymax=.41, fill="#1BB6AF", alpha=0.005) +
-  geom_pointrange(aes(x=Name_f, y = PfPR_median, ymin = PfPR_LCI, ymax = PfPR_UCI), color='#088BBE') +
-  labs(x='Country', y=expression(italic(Pf)~PR[2-10]~', 2019')) +
-  scale_y_continuous(breaks = c(0,0.1,0.2,0.3,0.4)) +
-  scale_x_discrete(labels = scales::wrap_format(20)) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-ggsave('./03_output/PfPR.pdf', width=10, height=4)
-
-
-# PfPR and mortality by country ------------------------------------------------
-nets_data <- read_csv('./01_data/Intervention_ITN.csv')
-
-PR <- read_csv('./01_data/00_PfPR_table_Global_admin0_2000-2019.csv') %>%
-  filter(Year == 2019) %>% dplyr::select(ISO, Name_0, starts_with('PfPR'))
-
-mortality <- read_csv('./01_data/00_Pf_mortality_rate_table_Global_admin0_2000-2019.csv') %>%
-  filter(Year == 2019) %>% dplyr::select(ISO, Name_0, starts_with('mortality'))
-
-PRmort <- PR %>% left_join(mortality) %>%
-  arrange(PfPR_median) %>%
-  mutate(SSA = case_when(Name_0 %in% nets_data$Name ~ 1,
-                         grepl('Cape|Comor|Ivoire|Lesotho|Maurit|Tome|Seyc|Tanz', Name_0) ~ 1)) %>%
-  filter(SSA == 1) %>%
-  mutate(Name_f = factor(Name_0, levels=Name_0))
-
-lacroix_palettes$Pamplemousse
-
-ggplot(PRmort) +
-  geom_rect(xmin=1, xmax=49, ymin=0.09, ymax=.11, fill="#F6A1A5", alpha=0.009) +
-  geom_rect(xmin=1, xmax=49, ymin=.19, ymax=.21, fill="#F8CD9C", alpha=0.01) +
-  geom_rect(xmin=1, xmax=49, ymin=.39, ymax=.41, fill="#1BB6AF", alpha=0.005) +
-  geom_pointrange(aes(x=Name_f, y = PfPR_median, ymin = PfPR_LCI, ymax = PfPR_UCI, color='PfPR'), alpha=0.4) +
-  geom_pointrange(aes(x=Name_f, y = mortality_rate_median*200, ymin = mortality_rate_LCI*200, ymax = mortality_rate_UCI*200, color='mortality'), alpha=0.4) +
-  labs(x='Country', y=expression(italic(Pf)~PR[2-10]~', 2019'), color='') +
-  scale_y_continuous(sec.axis = sec_axis(~ . / 200,
-                                         name = expression(italic(Pf)~'mortality rate (all ages)')),
-                     breaks = c(0,0.1,0.2,0.3,0.4)) +
-  scale_x_discrete(labels = scales::wrap_format(20)) +
-  scale_color_manual(values = c('#088BBE','blue')) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-ggsave('./03_output/PfPR_mortality.pdf', width=12, height=4)
-
+ggsave('./03_output/plots_median/RTSS_price_dist_lineplot.pdf', width=6, height=4)
 
 
 # univariate stacked histogram patterns ----------------------------------------
 # look at color choices
-RColorBrewer::display.brewer.all()
-RColorBrewer::brewer.pal(5, "Paired")
-colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
 
 # < by seasonality alone ------------------------------
 univariateseason <- function(season) {
 
-  if (season == 'highly seasonal'){
-  colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C")}
+  # assign colors
+  if(season=='perennial'){
+    colors <- c(itn, pbo, rtss_age)
+  }
 
-  if (season == 'seasonal'){
-    colors <- c("#A6CEE3", "#1F78B4","#FB9A99")}
+  if(season=='highly seasonal'){
+    colors <- c(itn, pbo, rtss_age, rtss_sv)
+  }
 
-  if (season == 'perennial'){
-    colors <- c("#A6CEE3", "#1F78B4","#B2DF8A")}
+  if(season=='seasonal'){
+    colors <- c(itn, pbo, smc)
+  }
 
   # by pfpr
   output <- scenarios %>%
@@ -848,8 +721,10 @@ univariateseason <- function(season) {
     full_join(ITNefficient(CE_ITNmin, 'less efficient')) %>%
     full_join(ITNefficient(CE_ITNmax, 'more efficient'))
 
-  if (season == 'seasonal'){
-    colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#FB9A99")}
+
+  if(season=='seasonal'){
+    colors <- c(itn, pbo, rtss_age, smc)
+  }
 
   D <- ggplot(output2) +
     geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient')), fill=intervention_f), position="fill") +
@@ -858,8 +733,10 @@ univariateseason <- function(season) {
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     theme_classic()
 
-  if (season == 'seasonal'){
-    colors <- c("#A6CEE3", "#1F78B4","#FB9A99")}
+
+  if(season=='seasonal'){
+    colors <- c(itn, pbo, smc)
+  }
 
   E <- ggplot(output) +
     geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend = F) +
@@ -870,7 +747,7 @@ univariateseason <- function(season) {
 
   (A + B + C + D + E) + plot_layout(guides = "collect", nrow=3, ncol=2) + plot_annotation(tag_levels = 'A')
 
-   ggsave(paste0('./03_output/univariate_quad_', season, '.pdf'), width=9, height=7)
+   ggsave(paste0('./03_output/plots_median/univariate_quad_', season, '.pdf'), width=9, height=7)
 
 }
 
@@ -881,7 +758,7 @@ univariateseason('perennial')
 
 
 # < faceted by season ----------------------------------------------------------
-colors <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99")
+colors <- c(itn, pbo, rtss_age, rtss_sv, smc)
 
 output <- scenarios %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
@@ -951,50 +828,13 @@ E <- ggplot(output) +
 
 (A + B + C + D + E) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-ggsave(paste0('./03_output/univariate_quad_by_season.pdf'), width=17, height=5)
-
-
-# ITN usage and countries -----------------------------------------------------
-# https://malariaatlas.org/research-project/the-impact-of-malaria-control-on-plasmodium-falciparum-in-africa-2000-2015/
-lacroix_palettes$Pamplemousse
-
-# import ITN data from MAP
-nets_data <- read_csv('./01_data/Intervention_ITN.csv') %>% arrange(`2015`) %>%
-  mutate(Name_f = factor(Name, levels=Name))
-
-ggplot(nets_data) +
-  geom_rect(xmin=1, xmax=43, ymin=-0.01, ymax=.25, fill="#F6A1A5", alpha=0.009) +
-  geom_rect(xmin=1, xmax=43, ymin=.25, ymax=.50, fill="#F8CD9C", alpha=0.01) +
-  geom_rect(xmin=1, xmax=43, ymin=.50, ymax=.75, fill="#1BB6AF", alpha=0.005) +
-  geom_rect(xmin=1, xmax=43, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
-  geom_point(aes(x=Name_f, y = `2015`)) +
-  labs(x='Country', y='ITN use by country, 2015') +
-  scale_x_discrete(labels = scales::wrap_format(20)) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-# OR try MAP data
-SSA_ITN <- readRDS('./03_output/MAP_ITN.rds') %>% arrange(median) %>%
-  filter(!is.na(median)) %>%
-  mutate(name_0 = factor(name_0, levels=name_0))
-
-ggplot(SSA_ITN) +
-  geom_rect(xmin=1, xmax=47, ymin=-0.01, ymax=.25, fill="#F6A1A5", alpha=0.009) +
-  geom_rect(xmin=1, xmax=47, ymin=.25, ymax=.50, fill="#F8CD9C", alpha=0.01) +
-  geom_rect(xmin=1, xmax=47, ymin=.50, ymax=.75, fill="#1BB6AF", alpha=0.005) +
-  geom_rect(xmin=1, xmax=47, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
-  geom_pointrange(aes(x=name_0, y=median, ymin=min, ymax=max), lwd=.3) +
-  labs(x='Country', y='ITN use by country, 2019') +
-  scale_x_discrete(labels = scales::wrap_format(20)) +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-
-ggsave('./03_output/ITN_usage.pdf', width=10, height=4)
+ggsave(paste0('./03_output/plots_median/univariate_quad_by_season.pdf'), width=17, height=5)
 
 
 
-# CE table RTS,S doses ---------------------------------------------------------
+
+# TABLES -----------------------------------------------------------------------
+# < CE table RTS,S doses ----
 # cost_per_dose <- c(2.69, 6.52, 12.91)
 # delivery_cost <- c(0.96, 1.62, 2.67)
 # cost_per_dose + delivery_cost
@@ -1022,7 +862,7 @@ nrow(scenarios %>%
        filter(resistance == 0 & seasonality == 'perennial'))
 
 
-# impact RTSS on top of other interventions ------------------------------------
+# < impact RTSS on top of other interventions ----------------------------------
 output <- scenarios %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, ITN, sep="_")) %>%
   filter(ITNuse==0.75)
@@ -1071,12 +911,11 @@ ggplot(data = output2) +
   labs(x = 'PfPR', y = 'DALYs averted', title = 'DALYS averted per year per 100,000 people') +
   theme_classic()
 
-ggsave('./03_output/RTSS_additional_impact.pdf', width=6, height=3)
+ggsave('./03_output/plots_median/RTSS_additional_impact.pdf', width=6, height=3)
 
 
 
-# ICER table -------------------------------------------------------------------
-
+# < ICER table ----
 # calculate change in dalys and cost
 output <- scenarios %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
@@ -1233,7 +1072,7 @@ merge %>% filter(dominate==0) %>%
 
 
 
-# ICERs among children ---------------------------------------------------------
+# < ICERs among children ----
 scenarios %>% ungroup() %>%
   #group_by(seasonality) %>%
   filter(intervention %in% c('RTS,S age-based', 'RTS,S seasonal')) %>%
@@ -1255,6 +1094,175 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
             median = median(CE, na.rm=T),
             q25 = quantile(CE, prob=0.25, na.rm=T),
             q75 = quantile(CE, prob=0.75, na.rm=T))
+
+
+# SUPPLEMENT -------------------------------------------------------------------
+
+# < ITN usage and countries ----
+# https://malariaatlas.org/research-project/the-impact-of-malaria-control-on-plasmodium-falciparum-in-africa-2000-2015/
+lacroix_palettes$Pamplemousse
+
+# import ITN data from MAP
+nets_data <- read_csv('./01_data/Intervention_ITN.csv') %>% arrange(`2015`) %>%
+  mutate(Name_f = factor(Name, levels=Name))
+
+ggplot(nets_data) +
+  geom_rect(xmin=1, xmax=43, ymin=-0.01, ymax=.25, fill="#F6A1A5", alpha=0.009) +
+  geom_rect(xmin=1, xmax=43, ymin=.25, ymax=.50, fill="#F8CD9C", alpha=0.01) +
+  geom_rect(xmin=1, xmax=43, ymin=.50, ymax=.75, fill="#1BB6AF", alpha=0.005) +
+  geom_rect(xmin=1, xmax=43, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
+  geom_point(aes(x=Name_f, y = `2015`)) +
+  labs(x='Country', y='ITN use by country, 2015') +
+  scale_x_discrete(labels = scales::wrap_format(20)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+# OR try MAP data
+SSA_ITN <- readRDS('./03_output/MAP_ITN.rds') %>% arrange(median) %>%
+  filter(!is.na(median)) %>%
+  mutate(name_0 = factor(name_0, levels=name_0))
+
+ggplot(SSA_ITN) +
+  geom_rect(xmin=1, xmax=47, ymin=-0.01, ymax=.25, fill="#F6A1A5", alpha=0.009) +
+  geom_rect(xmin=1, xmax=47, ymin=.25, ymax=.50, fill="#F8CD9C", alpha=0.01) +
+  geom_rect(xmin=1, xmax=47, ymin=.50, ymax=.75, fill="#1BB6AF", alpha=0.005) +
+  geom_rect(xmin=1, xmax=47, ymin=.75, ymax=.90, fill="#088BBE", alpha=0.006) +
+  geom_pointrange(aes(x=name_0, y=median, ymin=min, ymax=max), lwd=.3) +
+  labs(x='Country', y='ITN use by country, 2019') +
+  scale_x_discrete(labels = scales::wrap_format(20)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+ggsave('./03_output/plots_median/ITN_usage.pdf', width=10, height=4)
+
+
+# < ITN dist vs ITN use ----
+# relationship between cost_ITN_linear and cost_ITN:
+# read in netz package data to find the annual nets to distribute to give the simulated usage
+nets_data <- netz::prepare_data()
+
+# get nets to be distributed for each ITN usage
+ndist <- function(x) {
+
+  convert_usage_to_annual_nets_distributed(
+    target_usage = seq(0,0.85,0.05),
+    distribution_freq = 1095, # 3 years
+    use_rate_data = x,
+    half_life_data = median(nets_data$half_life_data$half_life),
+    extrapolate_npc = "loess",
+    net_loss_function = net_loss_map) %>%
+    select(target_use, annual_percapita_nets_distributed)
+
+}
+
+# assume maximum observed use rate and median bednet half life (across Africa)
+nets_distributed <- ndist(0.88)
+
+# assume observed rate is the min in Africa
+nets_distributed_min <- ndist(min(nets_data$use_rate_by_country$use_rate))
+nets_distributed_min <- rename(nets_distributed_min, annual_percapita_nets_distmin = annual_percapita_nets_distributed)
+
+# assume observed rate is the max in Africa
+nets_distributed_max <- ndist(max(nets_data$use_rate_by_country$use_rate))
+nets_distributed_max <- rename(nets_distributed_max, annual_percapita_nets_distmax = annual_percapita_nets_distributed)
+
+nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max)
+net <- c('pyrethroid', 'pyrethroid + PBO')
+output <- crossing(nets_distributed, net)
+
+output <- output %>%
+  mutate(ITNcost = case_when(net=='pyrethroid' ~ 3.50,            # $2.00 per net and $1.50 delivery cost
+                             net=='pyrethroid + PBO' ~ 3.80)) %>% # $2.30 per net and $1.50 delivery cost
+  mutate(cost_ITN = annual_percapita_nets_distributed * ITNcost * 3,  # true net cost accounting for non-linear relationship
+         cost_ITNmin = annual_percapita_nets_distmin * ITNcost * 3,  # true net cost MIN
+         cost_ITNmax = annual_percapita_nets_distmax * ITNcost * 3,  # true net cost MAX
+         cost_ITNmin = ifelse(is.na(cost_ITNmin), cost_ITN, cost_ITNmin),
+         cost_ITN_linear = target_use * ITNcost)         # ITN linear
+
+output2 <- output %>%
+  filter((net=='pyrethroid' & round(target_use,2) %in% c(0.25, 0.35, 0.50, 0.60, 0.75, 0.85)) |
+           (net=='pyrethroid + PBO' & round(target_use,2) %in% c(0.25, 0.5, 0.75))) %>%
+  mutate(shape='sim')
+
+# plot
+ggplot(output, aes(x=cost_ITN_linear, y = cost_ITN, color=target_use)) +
+  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=4, color='chartreuse1', fill='chartreuse1') +
+  geom_point(data=output2, aes(x=cost_ITN_linear, y = cost_ITN, shape=shape), size=3.5, color='chartreuse1', fill='chartreuse1')+
+  geom_abline(slope=1, size=1, lty=2, alpha=0.3) +
+  geom_point(size=2) +
+  geom_line(alpha=0.5, size=1) +
+  geom_ribbon(aes(ymin=cost_ITNmin, ymax=cost_ITNmax), color=NA, fill='cornflower blue', alpha=0.4) +
+  scale_color_gradient(limits=c(0,0.85)) +
+  scale_shape_manual(values=c(1), labels=c('value used in simulation')) +
+  facet_grid(~net) +
+  labs(x='Linear ITN cost', y='Netz ITN cost', color='target ITN use', shape='') +
+  theme_bw()
+
+ggsave('./03_output/plots_median/ITN_netz.pdf', width=8, height=4)
+
+
+# < PfPR by country ----
+nets_data <- read_csv('./01_data/Intervention_ITN.csv')
+
+PR <- read_csv('./01_data/00_PfPR_table_Global_admin0_2000-2019.csv') %>%
+  filter(Year == 2019) %>% arrange(PfPR_median) %>%
+  mutate(SSA = case_when(Name_0 %in% nets_data$Name ~ 1,
+                         grepl('Cape|Comor|Ivoire|Lesotho|Maurit|Tome|Seyc|Tanz', Name_0) ~ 1)) %>%
+  filter(SSA == 1) %>%
+  mutate(Name_f = factor(Name_0, levels=Name_0))
+
+
+lacroix_palettes$Pamplemousse
+
+ggplot(PR) +
+  geom_rect(xmin=1, xmax=49, ymin=0.09, ymax=.11, fill="#F6A1A5", alpha=0.009) +
+  geom_rect(xmin=1, xmax=49, ymin=.19, ymax=.21, fill="#F8CD9C", alpha=0.01) +
+  geom_rect(xmin=1, xmax=49, ymin=.39, ymax=.41, fill="#1BB6AF", alpha=0.005) +
+  geom_pointrange(aes(x=Name_f, y = PfPR_median, ymin = PfPR_LCI, ymax = PfPR_UCI), color='#088BBE') +
+  labs(x='Country', y=expression(italic(Pf)~PR[2-10]~', 2019')) +
+  scale_y_continuous(breaks = c(0,0.1,0.2,0.3,0.4)) +
+  scale_x_discrete(labels = scales::wrap_format(20)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave('./03_output/plots_median/PfPR.pdf', width=10, height=4)
+
+
+# < PfPR and mortality by country ----
+nets_data <- read_csv('./01_data/Intervention_ITN.csv')
+
+PR <- read_csv('./01_data/00_PfPR_table_Global_admin0_2000-2019.csv') %>%
+  filter(Year == 2019) %>% dplyr::select(ISO, Name_0, starts_with('PfPR'))
+
+mortality <- read_csv('./01_data/00_Pf_mortality_rate_table_Global_admin0_2000-2019.csv') %>%
+  filter(Year == 2019) %>% dplyr::select(ISO, Name_0, starts_with('mortality'))
+
+PRmort <- PR %>% left_join(mortality) %>%
+  arrange(PfPR_median) %>%
+  mutate(SSA = case_when(Name_0 %in% nets_data$Name ~ 1,
+                         grepl('Cape|Comor|Ivoire|Lesotho|Maurit|Tome|Seyc|Tanz', Name_0) ~ 1)) %>%
+  filter(SSA == 1) %>%
+  mutate(Name_f = factor(Name_0, levels=Name_0))
+
+lacroix_palettes$Pamplemousse
+
+ggplot(PRmort) +
+  geom_rect(xmin=1, xmax=49, ymin=0.09, ymax=.11, fill="#F6A1A5", alpha=0.009) +
+  geom_rect(xmin=1, xmax=49, ymin=.19, ymax=.21, fill="#F8CD9C", alpha=0.01) +
+  geom_rect(xmin=1, xmax=49, ymin=.39, ymax=.41, fill="#1BB6AF", alpha=0.005) +
+  geom_pointrange(aes(x=Name_f, y = PfPR_median, ymin = PfPR_LCI, ymax = PfPR_UCI, color='PfPR'), alpha=0.4) +
+  geom_pointrange(aes(x=Name_f, y = mortality_rate_median*200, ymin = mortality_rate_LCI*200, ymax = mortality_rate_UCI*200, color='mortality'), alpha=0.4) +
+  labs(x='Country', y=expression(italic(Pf)~PR[2-10]~', 2019'), color='') +
+  scale_y_continuous(sec.axis = sec_axis(~ . / 200,
+                                         name = expression(italic(Pf)~'mortality rate (all ages)')),
+                     breaks = c(0,0.1,0.2,0.3,0.4)) +
+  scale_x_discrete(labels = scales::wrap_format(20)) +
+  scale_color_manual(values = c('#088BBE','blue')) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave('./03_output/plots_median/PfPR_mortality.pdf', width=12, height=4)
 
 
 
@@ -1297,7 +1305,7 @@ F <- plot_pointrange('CE_u5_death', 'CE_u5_death_lower', 'CE_u5_death_upper', " 
 
 (A + B + C) / (D + E + F) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-ggsave('./03_output/pointrange_casestudy.pdf', width=8, height=4)
+ggsave('./03_output/plots_median/pointrange_casestudy.pdf', width=8, height=4)
 
 
 # < incidence plot -------------------------------------------------------------
@@ -1399,7 +1407,7 @@ scenarios %>%
   theme(panel.grid.minor = element_blank(),
         panel.grid.major = element_line(colour = "grey96"))
 
-ggsave('./03_output/inc_outcomes_casestudy_season.pdf', width=8, height=4)
+ggsave('./03_output/plots_median/inc_outcomes_casestudy_season.pdf', width=8, height=4)
 
 scenarios %>%
   filter(var == 'clinical incidence total') %>%
@@ -1421,7 +1429,7 @@ scenarios %>%
   theme(panel.grid.minor = element_blank(),
         panel.grid.major = element_line(colour = "grey96"))
 
-ggsave('./03_output/inc_outcomes_casestudy_season2.pdf', width=8, height=4)
+ggsave('./03_output/plots_median/inc_outcomes_casestudy_season2.pdf', width=8, height=4)
 
 
 
@@ -1491,7 +1499,7 @@ B <- scenarios %>%
 
 (A / B) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-ggsave('./03_output/pointrange_casestudy_season.pdf', width=9, height=6)
+ggsave('./03_output/plots_median/pointrange_casestudy_season.pdf', width=9, height=6)
 
 
 # % change in outcome / % change in cost
