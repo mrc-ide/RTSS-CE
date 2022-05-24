@@ -33,11 +33,11 @@ itn_rtss <- "#F4B95A"
 scenarios <- readRDS('./03_output/scenarios_draws.rds')
 dalyoutput_cost <- readRDS('./03_output/dalyoutput_draws.rds')
 
-test <- readRDS('./03_output/dalyoutput_draws.rds') %>%
+test <- dalyoutput_cost %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
   summarize(n = n()) # 2,574 scenarios matches median results
 
-test <- scenarios_draws %>%
+test <- scenarios %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
   summarize(n = n()) # 2,304 scenarios matches median results
 
@@ -409,7 +409,7 @@ scenarios %>%
   ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 5.5, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3) +
+  geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
   coord_cartesian(ylim=c(-100, 500), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " DALYs")),
@@ -442,7 +442,7 @@ scenarios %>% filter(intervention != 'none') %>%
   ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=intervention)) +
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 5.5, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3) +
+  geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
   coord_cartesian(ylim=c(-1, 60), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " cases")),
@@ -497,16 +497,20 @@ output <- scenarios %>%
 
 # < all seasons box and whisker ####
 seasoncosts <- output %>% group_by(seasonality) %>%
-  summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm=T),2),
-            med = round(median(costRTSS, na.rm=T),2),
-            q75 = round(quantile(costRTSS, probs = 0.75, na.rm=T),2))
+  summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm = T), 2),
+            med = round(median(costRTSS, na.rm = T),2),
+            q75 = round(quantile(costRTSS, probs = 0.75, na.rm = T), 2),
+            min = round(min(costRTSS, na.rm = T), 2),
+            max = round(max(costRTSS, na.rm = T), 2))
 
 ggplot(output) +
   geom_hline(yintercept = 0, color = 'light grey') +
-  geom_boxplot(aes(x=factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y=costRTSS), fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .5, nudge_x = -.2) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .5, nudge_x = -.2) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .5, nudge_x = -.2) +
+  geom_boxplot(aes(x = factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y = costRTSS),
+               fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .55, nudge_x = -.22) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .55, nudge_x = -.2) +
+  geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal'), aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .55, nudge_x = -.2) +
+  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal'), aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = 1.2, nudge_x = -.2) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   theme_classic() +
   labs(y='RTS,S cost (USD) per dose',
@@ -541,12 +545,20 @@ output %>% filter(costRTSS >= 5) %>% group_by(SMC, seasonality) %>%
 
 
 # < line plot ####
+
 output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
-  mutate(p = (nrow(output) - row_number() + 1) / nrow(output) * 100)
+  mutate(p = (nrow(output) - row_number() + 1) / nrow(output) * 100) %>%
+  ungroup()
 
 dose2 <- output2 %>% filter(costRTSS <= 2) %>% top_n(-1) %>% select(p) %>% as.numeric()
 dose5 <- output2 %>% filter(costRTSS <= 5) %>% top_n(-1) %>% select(p) %>% as.numeric()
 dose10 <- output2 %>% filter(costRTSS <= 10) %>% top_n(-1) %>% select(p) %>% as.numeric()
+
+table(output$drawID) # 450
+
+output3 <- output %>% ungroup() %>% group_by(drawID) %>% arrange(costRTSS) %>%
+  mutate(p = (450 - row_number() + 1) / 450 * 100) %>%
+  ungroup()
 
 segments <- data.frame(
   x = c(2, -20, 5, -20, 10, -20),
@@ -559,12 +571,13 @@ points <- data.frame(
   y = c(dose2, dose5, dose10)
 )
 
-ggplot(output2) +
+ggplot(output3) +
   geom_vline(xintercept = 0, color = 'grey') +
   geom_segment(data = segments,
                aes(x = x, xend = xend, y = y, yend = yend),
                lty = 3, color = 'grey') +
-  geom_line(aes(x = costRTSS, y = p), color = '#619CFF', size = 1) +
+  geom_line(aes(x = costRTSS, y = p, group = drawID), color = '#619CFF', size = 1, alpha = 0.1) +
+  geom_line(data = output2, aes(x = costRTSS, y = p, group = drawID), color = '#619CFF', size = 1) +
   geom_point(data = points, aes(x = x, y = y), color = 'blue', size = 2) +
   theme_classic() +
   labs(y='% of scenarios where \nRTS,S is most cost-effective',
