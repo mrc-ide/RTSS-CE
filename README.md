@@ -21,23 +21,38 @@ Strategic resource allocation to maximize the impact of malaria response.
 
 ```
 .
-├── 01_data                            # Data files
-├── 02_code                            # R code file
-|   ├── A_cost_effectiveness.R         # Cost-effectiveness code
-|   ├── B_DHS_analysis.R               # DHS data for case studies
-|   ├── C_figures_tables.R             # Figures and tables
-|   ├── MISC_ITN_PR_distributions.R    # Visualizing world ITN use and PfPR patterns
-|   ├── MISC_seasonality_script.R      # Visualizing timing of seasonal interventions
-|   ├── MISC_SMCdosetest.R             # Determining which SMC profiles should be used
-|   ├── MISC_warmup_time_test.R        # Determining the warmup time needed
-|   ├── HPC                            # Copy of Q: drive folder for HPC runs
-|   |   ├── functions.R                # Functions
-|   |   ├── PfPR_EIR_match.R           # Matching model PfPR outputs to EIRs
-|   |   ├── EIRestimates.rds           # Stored EIR estimates for select PfPR settings
-|   |   ├── HPC_runs.R                 # Running malariasimulation scenarios on HPC
-|   |   ├── HPC_processing.R           # Processing model output
-├── 03_output                          # Figures and .rds files
-├── GF_RTSS_CE.Rproj                   # R.Studio project file
-└── README.md                          # Project overview
+├── 01_data                                # Data files
+├── 02_code                                # R code file
+|   ├── HPC_draws                          # HPC runs for parameter draws
+|   |   ├── A_PfPR_EIR_match.R               # Match PfPR to EIR
+|   |   ├── B_HPC_runs.R                     # HPC runs
+|   |   ├── function_draws.R                 # Functions for HPC
+|   |   ├── Processing                     # Data processing
+|   |   |   ├── A_HPC_processing.R           # Process HPC output
+|   |   |   ├── add_costs.R                  # Helper-function add costs
+|   |   |   ├── cost_effectiveness.R         # Helper-function calc CE
+|   |   |   ├── deaths_dalys.R               # Helper-function calc deaths & DALYs
+|   |   |   ├── netz_dist.R                  # Helper-function calc nets distributed
+|   |   |   ├── outcome_averted.R            # Helper-function calc DALYs and cases averted
+|   ├── HPC_median                         # HPC runs for median parameter values
+|   |   ├── A_PfPR_EIR_match.R               # Match PfPR to EIR
+|   |   ├── B_HPC_runs.R                     # Run malariasimulation scenarios on HPC
+|   |   ├── C_HPC_processing.R               # Process model output
+|   |   ├── D_HPC_case_studies.R             # Process model output
+|   |   ├── functions.R                      # Functions for HPC
+|   |   ├── parameter_draws.R                # List parameters for each draw
+|   ├── Median                             # Analysis: median parameter values
+|   |   ├── A_cost_effectiveness.R           # Cost-effectiveness code
+|   |   ├── B_DHS_analysis.R                 # DHS data for case studies
+|   |   ├── C_figures_tables.R               # Figures and tables
+|   |   ├── MISC_ITN_PR_distributions.R      # Visualize world ITN use and PfPR patterns
+|   |   ├── MISC_seasonality_script.R        # Visualize timing of seasonal interventions
+|   |   ├── MISC_SMCdosetest.R               # Determine which SMC profiles should be used
+|   |   ├── MISC_warmup_time_test.R          # Determine the warmup time needed
+|   ├── Parameter draws                    # Analysis: parameter draws
+|   |   ├── A_figures_tables.R               # Figures and tables
+├── 03_output                              # PDF figures and .rds files
+├── GF_RTSS_CE.Rproj                       # R.Studio project file
+└── README.md                              # Project overview
 
 ```

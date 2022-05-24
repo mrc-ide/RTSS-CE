@@ -15,12 +15,6 @@ exponential demography file from DIDE malaria group
 Flat_demog.txt:
 flat demography file from DIDE malaria group
 
-treatment_unit_costs.rda:
-cost table from DIDE malaria group, previous GF work
-
-unit_costs.rda:
-cost table from DIDE malaria group, previous GF work
-
 Intervention_ITN.csv: read below for info from MAP
 
 ========================
