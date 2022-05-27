@@ -1429,6 +1429,20 @@ scenarios %>%
   theme(panel.grid.minor = element_blank(),
         panel.grid.major = element_line(colour = "grey96"))
 
+# examine difference between rural / urban
+test <- scenarios %>%
+  mutate(baselinecost = ifelse(scenario_f == 'baseline', cost_total, NA)) %>%
+  group_by(seasonality, scenario2_f) %>%
+  mutate(baselinecost = mean(baselinecost, na.rm = T)) %>%
+
+  group_by(seasonality, scenario2_f, scenario_f, var) %>% arrange(seasonality, scenario2_f, scenario_f, var, residence) %>%
+  mutate(diff = round(lag(estimate) - estimate, 1),
+         costtotal = round((lag(cost_total) - lag(baselinecost)) + (cost_total - baselinecost), 1),
+         baselineCI = ifelse(scenario_f == 'baseline', diff, NA)) %>%
+
+  filter(!is.na(diff)) %>%
+  filter(var == 'clinical incidence total'); print(test, n = 30)
+
 # table for equity scenarios
 test <- scenarios %>%
   mutate(baselinecost = ifelse(scenario_f == 'baseline', cost_total, NA)) %>%

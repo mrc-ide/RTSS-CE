@@ -35,10 +35,18 @@ dalyoutput_cost <- readRDS('./03_output/dalyoutput_draws.rds')
 
 test <- dalyoutput_cost %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   summarize(n = n()) # 2,574 scenarios matches median results
+
+test <- dalyoutput_cost %>%
+  filter(ITNboost==0 & ITN=='pyr' & RTSS=='none' & # filter out interventions
+           (SMC==0 | (seasonality=='highly seasonal'))) %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  summarize(n = n()); nrow(test) / 50 # 270 baseline scenarios matches median results
 
 test <- scenarios %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   summarize(n = n()) # 2,304 scenarios matches median results
 
 
@@ -383,11 +391,17 @@ ggsave(paste0('./03_output/plots_draws/impact_cloud_all.pdf'), width=12, height=
 
 
 # box and whisker delta cost / delta daly --------------------------------------
-scenarios %>% group_by(intervention_f) %>%
+tabledat <- scenarios %>%
+  group_by(intervention_f) %>%
   summarize(n=n(),
             median = round(median(CE)),
             q25 = round(quantile(CE, p=0.25)),
-            q75 = round(quantile(CE, p=0.75)))
+            q75 = round(quantile(CE, p=0.75)),
+            min = round(min(CE)),
+            max = round(max(CE))) %>%
+  arrange(median)
+
+tabledat; sum(tabledat$n)
 
 # set up text for plot
 text_high <- textGrob("Highest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
@@ -428,12 +442,17 @@ ggsave('./03_output/plots_draws/box_whisker_CE.pdf', width=10, height=5)
 
 
 # plotting with cost per cases averted
-
-scenarios %>% group_by(intervention_f) %>%
+tabledat <- scenarios %>%
+  group_by(intervention_f) %>%
   summarize(n=n(),
             median = round(median(CE_case)),
             q25 = round(quantile(CE_case, p=0.25)),
-            q75 = round(quantile(CE_case, p=0.75)))
+            q75 = round(quantile(CE_case, p=0.75)),
+            min = round(min(CE_case)),
+            max = round(max(CE_case))) %>%
+  arrange(median)
+
+tabledat; sum(tabledat$n)
 
 scenarios %>% filter(intervention != 'none') %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
@@ -492,7 +511,7 @@ output <- scenarios %>%
   ) %>%
   select(ID, seasonality, pfpr, ITNuse, ITN, RTSS, RTSScov, resistance, SMC, treatment, intervention, interventionmin, CE, CEmin, costRTSS) %>%
   group_by(ID) %>%
-  arrange(ID,costRTSS)
+  arrange(ID, costRTSS)
 
 
 # < all seasons box and whisker ####
@@ -503,7 +522,7 @@ seasoncosts <- output %>% group_by(seasonality) %>%
             min = round(min(costRTSS, na.rm = T), 2),
             max = round(max(costRTSS, na.rm = T), 2))
 
-ggplot(output) +
+A <- ggplot(output) +
   geom_hline(yintercept = 0, color = 'light grey') +
   geom_boxplot(aes(x = factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y = costRTSS),
                fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1) +
@@ -520,7 +539,7 @@ ggplot(output) +
   coord_cartesian(ylim = c(-15,15)) +
   theme(plot.caption.position = "plot")
 
-ggsave('./03_output/plots_draws/RTSS_price_dist_all.pdf', width=6, height=4)
+ggsave(A, './03_output/plots_draws/RTSS_price_dist_all.pdf', width=6, height=4)
 
 
 # table
@@ -532,16 +551,18 @@ output %>% ungroup() %>%
             med = round(median(costRTSS, na.rm=T),2),
             q75 = round(quantile(costRTSS, probs = 0.75, na.rm=T),2))
 
-# how many are above $5
+# how many are above $5 - SMC / ITNuse
 output %>% filter(costRTSS >= 5) %>% group_by(SMC, ITNuse) %>%
-  summarize(n=n()) %>%
+  summarize(n = n()) %>%
   ungroup() %>%
-  mutate(t=sum(n))
+  mutate(t = sum(n), p = n/t * 100)
 
-output %>% filter(costRTSS >= 5) %>% group_by(SMC, seasonality) %>%
-  summarize(n=n()) %>%
+
+# how many are above $5 - pfpr
+output %>% filter(costRTSS >= 5) %>% group_by(pfpr) %>%
+  summarize(n = n()) %>%
   ungroup() %>%
-  mutate(t=sum(n))
+  mutate(t = sum(n), p = n/t * 100)
 
 
 # < line plot ####
@@ -571,7 +592,7 @@ points <- data.frame(
   y = c(dose2, dose5, dose10)
 )
 
-ggplot(output3) +
+B <- ggplot(output3) +
   geom_vline(xintercept = 0, color = 'grey') +
   geom_segment(data = segments,
                aes(x = x, xend = xend, y = y, yend = yend),
@@ -586,7 +607,12 @@ ggplot(output3) +
   scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 15)) +
   coord_cartesian(xlim = c(0, 13), ylim = c(0, 100))
 
-ggsave('./03_output/plots_draws/RTSS_price_dist_lineplot.pdf', width=6, height=4)
+ggsave(B, './03_output/plots_draws/RTSS_price_dist_lineplot.pdf', width=6, height=4)
+
+# combined plot
+A + B + plot_annotation(tag_levels = 'A')
+
+ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width=10, height=4)
 
 
 # univariate stacked histogram patterns ----------------------------------------
@@ -749,16 +775,42 @@ D <- ggplot(output2) +
   theme_classic()
 
 E <- ggplot(output) +
-  geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill") +
+  geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend=F) +
   labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
   scale_fill_manual(values=colors) +
   scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
   facet_grid(~seasonality) +
   theme_classic()
 
-(A + B + C + D + E) + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
+legend <- cowplot::get_legend(D)
 
-ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season.pdf'), width=17, height=5)
+Dm <- D + theme(legend.position = "none")
+
+
+(A + B + C + Dm + E + legend) +
+  plot_layout(nrow = 3) +
+  plot_annotation(tag_levels = list(c('A', 'B', 'C', 'D', 'E', '')))
+
+ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season.pdf'), width=10, height=8)
+
+
+prop_CE <- function(data, var){
+  data %>%
+    mutate(intervention = ifelse(grepl('RTS,S', intervention), 'RTS,S', intervention),
+           intervention_f = factor(intervention, levels = c('ITN 10% increase', 'ITN PBO', 'RTS,S', 'SMC'))) %>%
+    group_by(seasonality, {{var}}, intervention_f) %>%
+    summarize(n = n()) %>%
+    ungroup() %>%
+    group_by(seasonality, {{var}}) %>%
+    mutate(t = sum(n), p = n / t * 100)
+}
+
+print(prop_CE(output, sim_length), n = 30) # overall
+print(prop_CE(output, pfpr), n = 30) # overall
+print(prop_CE(output, ITNuse), n = 40)
+print(prop_CE(output, resistance), n = 30)
+print(prop_CE(output2, model), n = 40)
+print(prop_CE(output, treatment), n = 30)
 
 
 # TABLES -----------------------------------------------------------------------
@@ -792,6 +844,7 @@ nrow(scenarios %>%
 
 # < impact RTSS on top of other interventions ----------------------------------
 output <- scenarios %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, ITN, sep="_")) %>%
   filter(ITNuse==0.75)
 
@@ -801,12 +854,12 @@ none <- output %>%
                          seasonality=='seasonal' & intervention %in%
                            c('ITN 10% increase + SMC','ITN PBO + SMC') ~ 1)) %>%
   filter(set == 1) %>%
-  dplyr::select(file, ID, daly, cases, cost_total, u5_dalys, n_0_1825) %>%
+  dplyr::select(file, ID, drawID, daly, cases, cost_total, u5_dalys, n_0_1825) %>%
   rename(daly_baseline = daly,
          cases_baseline = cases,
          cost_total_baseline = cost_total,
          u5_daly_baseline = u5_dalys) %>%
-  dplyr::select(file, ID, daly_baseline, cases_baseline, cost_total_baseline, u5_daly_baseline)
+  dplyr::select(file, ID, drawID, daly_baseline, cases_baseline, cost_total_baseline, u5_daly_baseline)
 
 base_IDs <- none$file
 
@@ -816,19 +869,15 @@ output2 <- output %>% filter(!(file %in% base_IDs)) %>%
                          seasonality=='seasonal' & intervention %in%
                            c('ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC') ~ 1)) %>%
   filter(set == 1) %>%
-  dplyr::select(file, ID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys) %>%
-  left_join(none %>% dplyr::select(-file), by=c('ID')) %>%
+  dplyr::select(file, ID, drawID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys) %>%
+  left_join(none %>% dplyr::select(-file), by=c('ID', 'drawID')) %>%
   mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly),
          deltadaly = daly_baseline - daly,
          deltacases = cases_baseline - cases,
          CE_u5 = (cost_total - cost_total_baseline) / (u5_daly_baseline - u5_dalys))
 
-summary(output2$deltadaly / 2)
-summary(output2$CE)
-summary(output2[output2$seasonality=='perennial',]$CE)
-summary(output2[output2$seasonality=='seasonal',]$CE)
-summary(output2[output2$seasonality=='highly seasonal',]$CE)
 
+# adjusting for 15 year simulation period and 200,000 population arguments
 summary(output2$deltadaly / (2*15)) # additional dalys averted per year in a population of 100,000 people
 summary(output2$deltacases / (2*15)) # additional cases averted per year in a population of 100,000 people
 summary(output2$CE_u5) # additional cases averted per year in a population of 100,000 people
@@ -846,25 +895,22 @@ ggsave('./03_output/RTSS_additional_impact.pdf', width=6, height=3)
 # < ICER table ----
 # calculate change in dalys and cost
 output <- scenarios %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
   filter(intervention!='none') %>%
   mutate(deltadaly = daly_baseline - daly,
          deltacost = cost_total - cost_total_baseline,
-         cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly)
+         cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly) %>%
+  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+  group_by(ID, drawID, seasonality, intervention, intervention_f) %>%
+  summarize(deltadaly = median(deltadaly),
+            deltacost = median(deltacost),
+            cost_daly_averted = median(cost_daly_averted))
 
-# all strategies, by baseline ITNuse and seasonality
-output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% increase','ITN PBO','RTS,S age-based','RTS,S seasonal','ITN 10% increase + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% increase + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
-RColorBrewer::brewer.pal(12, "Paired")
-# colors <- c("#A6CEE3","#1F78B4","#B2DF8A","#33A02C","#FB9A99","#E31A1C",'deeppink',"#CAB2D6","#6A3D9A",'black',"#FDBF6F","#FF7F00")
-colors <- c("#1F78B4","#B2DF8A","#33A02C","#FB9A99", "#A6CEE3",
-            "#E31A1C",'deeppink',"#CAB2D6","#6A3D9A")
-
-# removing dominated strategies
 final <- output %>%
-  filter(deltadaly >= 0 & deltacost > 0) %>%
   # filter out mixed strategies
-  group_by(ID) %>% arrange(ID, deltacost) %>%
+  group_by(ID, drawID) %>% arrange(ID, drawID, deltacost) %>%
+  filter(!(deltadaly < 0 & deltacost > 0)) %>%
   # filter out dominated strategies
   mutate(dominate = case_when(deltadaly < lag(deltadaly,n=12L) ~ 1,
                               deltadaly < lag(deltadaly,n=11L) ~ 1,
@@ -959,15 +1005,13 @@ final <- output %>%
   filter(dominate==0) %>%
   mutate(ICER = ifelse(is.na(ICER), (deltacost) / (deltadaly), ICER),
          dominate = 0) %>%
-  dplyr::select(ID, intervention, ICER, dominate)
+  dplyr::select(ID, drawID, intervention, ICER, dominate)
 
-merge <- output %>% left_join(final, by=c('ID', 'intervention')) %>% mutate(dominate = ifelse(is.na(dominate),1,dominate)) %>%
-  mutate(resistance = ifelse(resistance!=0, 1, 0))
+merge <- output %>% left_join(final, by=c('ID', 'drawID', 'intervention')) %>%
+  mutate(dominate = ifelse(is.na(dominate), 1, dominate))
 
-output %>% group_by(intervention) %>% filter(resistance==0) %>%
-  summarize(cost_daly_averted = median(cost_daly_averted))
-
-merge %>% group_by(intervention) %>%
+# group results by intervention
+merge %>% group_by(intervention_f) %>%
   summarize(t = n(),
             ndominate = n()-sum(dominate),
             p_ndominate = ndominate / t*100,
@@ -975,28 +1019,22 @@ merge %>% group_by(intervention) %>%
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 
-merge %>% filter(resistance==0) %>% group_by(intervention) %>%
+# group results by seasonality and intervention
+merge %>% group_by(seasonality, intervention_f) %>%
   summarize(t = n(),
             ndominate = n()-sum(dominate),
             p_ndominate = ndominate / t*100,
             ICER_m = median(ICER, na.rm=T),
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
-            ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
+            ICER_75 = quantile(ICER, prob=0.75, na.rm=T)) %>%
+  write.table("clipboard", sep="\t", row.names=FALSE, col.names=FALSE)
+
 
 # ICER just among non-dominated strategies
 merge %>% filter(dominate==0) %>% group_by(intervention) %>%
   summarize(ICER_m = median(ICER, na.rm=T),
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
-
-
-merge %>% filter(dominate==0) %>%
-  mutate(RTSSalone = ifelse(intervention %in% c('RTS,S age-based', 'RTS,S seasonal'), 1, 0)) %>%
-  group_by(seasonality, ID) %>%
-  summarize(rtss = sum(RTSSalone, na.rm=T)) %>%
-  mutate(rtss = ifelse(rtss>=1,1,0)) %>%
-  group_by(seasonality) %>%
-  summarize(n=n(), t=sum(rtss, na.rm=T), p=t/n*100, q=100-p)
 
 
 
