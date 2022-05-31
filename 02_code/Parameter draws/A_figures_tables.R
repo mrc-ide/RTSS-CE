@@ -1060,3 +1060,133 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
             median = median(CE, na.rm=T),
             q25 = quantile(CE, prob=0.25, na.rm=T),
             q75 = quantile(CE, prob=0.75, na.rm=T))
+
+
+
+
+# CASE STUDY -------------------------------------------------------------------
+output <- readRDS('./03_output/scenarios_casestudy.rds')
+
+# gap in PfPR
+output_pfpr <- output %>%
+  filter(pfpr %in% c(0.40, 0.10) & RTSScov %in% c(0, 0.80) & ITNuse == 0.50) %>%
+  mutate(scenario2 = 1)
+
+# gap in ITN use
+output_itn <- output %>%
+  filter(RTSScov %in% c(0, 0.80) & ((pfpr == 0.20 & ITNuse == 0.60) | (pfpr == 0.10 & ITNuse == 0.30))) %>%
+  mutate(scenario2 = 2)
+
+# gap in RTSS coverage
+output_rtss <- output %>%
+  filter(ITNuse == 0.50 & ((pfpr == 0.20 & RTSScov %in% c(0, 0.50)) | (pfpr == 0.10 & RTSScov %in% c(0, 0.80)))) %>%
+  mutate(scenario2 = 3)
+
+# combine
+output <- full_join(output_pfpr, output_itn) %>% full_join(output_rtss) %>%
+  mutate(scenario2_f = factor(scenario2,
+                              levels=c(1,2,3),
+                              labels=c('gap in PfPR', 'gap in ITN use', 'gap in vaccination')))
+
+
+# assign scenarios
+scenario1 <- output %>%
+  filter(ITNboost==0 & RTSS=='none') %>% mutate(scenario=1)
+
+scenario2 <- output %>%
+  filter(ITNboost==1 & RTSS=='none') %>% mutate(scenario=2)
+
+scenario3 <- output %>%
+  filter(RTSS=='EPI' & ITNboost==0) %>% mutate(scenario=3)
+
+scenario4 <- output %>%
+  filter((pfpr %in% c(0.20, 0.40) & ITNboost==1 & RTSS=='none') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
+  mutate(scenario=4)
+
+scenario5 <- output %>%
+  filter((pfpr %in% c(0.20, 0.40) & ITNboost==0 & RTSS=='EPI') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
+  mutate(scenario=5)
+
+scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
+  full_join(scenario4) %>% full_join(scenario5) %>%
+  mutate(scenario_f = factor(scenario,
+                             levels=c(1,2,3,4,5),
+                             labels=c('baseline','mass ITN 10% increase', 'mass age-based RTS,S', 'targeted ITN 10% increase', 'targeted age-based RTS,S'))) %>%
+  mutate(
+    clin_inc = cases / n,
+    clin_inc_lower = cases_lower / n,
+    clin_inc_upper = cases_upper / n,
+
+    clin_inc_u5 = u5_cases / n_0_1825,
+    clin_inc_u5_lower = u5_cases_lower / n_0_1825,
+    clin_inc_u5_upper = u5_cases_upper / n_0_1825,
+
+    sev_inc = severe_cases / n,
+    sev_inc_u5 = u5_severe / n_0_1825) %>%
+
+  mutate(residence = ifelse(pfpr %in% c(0.20, 0.40), 'rural', 'urban')) %>%
+  dplyr::select(seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, clin_inc:sev_inc_u5) %>%
+  pivot_longer(cols = clin_inc:sev_inc_u5, names_to = 'var', values_to = 'value') %>%
+  mutate(estimate = ifelse(!(grepl('_lower',var) | grepl('_upper',var)), value, NA),
+         lower = ifelse(grepl('_lower',var), value, NA),
+         upper = ifelse(grepl('_upper',var), value, NA),
+         var = case_when(grepl('clin_inc_u5',var) ~ 'clinical incidence <5s',
+                         grepl('clin_inc',var) ~ 'clinical incidence total',
+                         grepl('sev_inc_u5',var) ~ 'severe incidence <5s',
+                         grepl('sev_inc',var) ~ 'severe incidence total')) %>%
+  dplyr::select(-value) %>%
+  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, residence, var) %>%
+  summarize(estimate = mean(estimate, na.rm=T),
+            lower = mean(lower, na.rm=T),
+            upper = mean(upper, na.rm=T),
+            cost_total = mean(cost_total))
+
+
+
+# < primer ----
+library(ggforce)
+
+a <- data.frame(
+  x = c(0.5, 0.5, 1.5, 1.5),
+  y = c(1.5, 2.5, 2.5, 1.5)
+)
+
+b <- data.frame(
+  x = c(1.5, 1.5, 2.5, 2.5),
+  y = c(1.5, 2.5, 2.5, 1.5)
+)
+
+c <- data.frame(
+  x = c(0.5, 0.5, 1.5, 1.5),
+  y = c(0.5, 1.5, 1.5, 0.5)
+)
+
+d <- data.frame(
+  x = c(1.5, 1.5, 2.5, 2.5),
+  y = c(0.5, 1.5, 1.5, 0.5)
+)
+
+
+A <- ggplot() +
+  geom_shape(data = a, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+  geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
+  geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
+  geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+  annotate("text", x = 1, y = 2, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
+  annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
+  annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
+  annotate("text", x = 2, y = 1, label = 'CE \u274c \nEquity \u2714', color = 'white') +
+  labs(y = expression(paste(Delta," cost / ", Delta, " DALYs")), x = 'disparity between urban and rural DALYs') +
+  theme_classic() +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+B <-
+
+
+
+
+
+
+
+

@@ -1,6 +1,6 @@
 # Specify HPC options ----------------------------------------------------------
 library(didehpc)
-setwd('Q:/GF-RTSS-CE')
+setwd('M:/Hillary/GF-RTSS-CE')
 
 options(didehpc.cluster = "fi--didemrchnb",
         didehpc.username = "htopazia")
@@ -14,7 +14,7 @@ ctx <- context::context_save(path = "Q:/contexts",
                              packages = c("dplyr", "malariasimulation", "cali"),
                              package_sources = src)
 
-share <- didehpc::path_mapping('Home drive', "Q:", '//fi--san03.dide.ic.ac.uk/homes/htopazia', "M:")
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didef3.dide.ic.ac.uk/malaria", "M:")
 config <- didehpc::didehpc_config(shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
@@ -66,13 +66,13 @@ sim_length <- 15*year
 
 # baseline scenarios
 ITN <- c('pyr')
-ITNuse <- c(0, 0.25, 0.50, 0.75)
+ITNuse <- c(0, 0.25, 0.30, 0.50, 0.60, 0.75)
 resistance <- c(0, 0.4, 0.8)
 treatment <- c(0.30, 0.45, 0.60)
 SMC <- c(0, 0.85)
 
 interventions <-
-  crossing(ITN, ITNuse, resistance, treatment,SMC)
+  crossing(ITN, ITNuse, resistance, treatment, SMC)
 
 
 # create combination of all runs and remove non-applicable scenarios
@@ -80,8 +80,15 @@ baseline <- crossing(population, stable, warmup, sim_length, speciesprop, interv
   filter(
     (SMC == 0 & seas_name %in% c("perennial", "seasonal")) |
       (SMC > 0 & seas_name == 'highly seasonal')) %>% # SMC only in highly seasonal settings
-  filter(!(ITNuse == 0 & resistance != 0))  # do not introduce resistance when ITNuse==0
+  filter(!(ITNuse == 0 & resistance != 0)) %>% # do not introduce resistance when ITNuse==0
+  filter(!(ITNuse %in% c(0.30, 0.60) & treatment %in% c(0.30, 0.60))) %>% # no 30% or 60% treatment in case studies
+  filter(!(ITNuse %in% c(0.30, 0.60) & seas_name == 'seasonal')) # no SMC in case studies
 
+
+dat1 <- baseline %>% filter(ITNuse %in% c(0, 0.25, 0.50, 0.75))
+dat2 <- baseline %>% filter(ITNuse %in% c(0.30, 0.60))
+
+baseline <- rbind(dat1, dat2)
 
 # function to get parameters for baseline scenarios
 getparams_baseline <- function(x){
@@ -275,11 +282,13 @@ saveRDS(out, './02_code/HPC_draws/baselinescenarios.rds')
 
 
 # Run tasks -------------------------------------------------------------------
-x = c(1:nrow(out)) # 270 baseline scenarios
+x = c(1:nrow(out)) # 306 baseline scenarios
 y = c(1:50) # 50 parameter draws
 
 # define all combinations of scenarios and draws
+
 index <- crossing(x,y)
+index$x = index$x
 
 # remove ones that have already been run
 index <- index %>% mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$x, '_', index$y, ".rds")) %>%
@@ -288,7 +297,7 @@ index <- index %>% mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$
   select(-f, -exist)
 
 # run a test with the first scenario
-# index <- index %>% filter(x == 1)
+# index <- index %>% filter(x == 271)
 
 # submit all remaining tasks
 # t <- obj$enqueue_bulk(index, PRmatch)

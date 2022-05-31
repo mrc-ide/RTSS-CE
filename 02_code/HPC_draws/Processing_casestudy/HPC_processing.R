@@ -6,7 +6,7 @@ HPC_processing <- function(x # index of HPC run to read in and process
                            ){
 
   # list all files run by HPC
-  # files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
+  files <- list.files(path = "M:/Hillary/GF-RTSS-CE/03_output/HPC/", pattern = "casestudy_*", full.names = TRUE)
 
   # read in specified rds file
   output <- readRDS(files[x])

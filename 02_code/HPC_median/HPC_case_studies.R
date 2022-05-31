@@ -152,7 +152,7 @@ library(tidyverse)
 data.dir <- 'C:/Users/htopazia/OneDrive - Imperial College London/Github/GF-RTSS-CE/'
 
 # pull all .rds files from HPC output folder and combine
-files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC_median//", pattern = "casestudy_*", full.names = TRUE)
+files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "casestudy_*", full.names = TRUE)
 dat_list <- lapply(files, function (x) readRDS(x))
 dat <- rbindlist(dat_list, fill = TRUE, idcol="file")
 

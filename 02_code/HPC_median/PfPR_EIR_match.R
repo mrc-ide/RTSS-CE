@@ -72,7 +72,7 @@ t$status()
 
 
 # < run case-study matches -----------------------------------------------------
-ITNuse <- c(0.3,0.5,0.6)
+ITNuse <- c(0.3, 0.5, 0.6)
 treatment <- c(0.45)
 
 combo <- crossing(stable, init_EIR, ITN, ITNuse, treatment) %>%
