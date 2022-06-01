@@ -1065,7 +1065,9 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
 
 
 # CASE STUDY -------------------------------------------------------------------
-output <- readRDS('./03_output/scenarios_casestudy.rds')
+
+output <- readRDS('./03_output/dalyoutput_draws_casestudy.rds') %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62)
 
 # gap in PfPR
 output_pfpr <- output %>%
@@ -1081,6 +1083,7 @@ output_itn <- output %>%
 output_rtss <- output %>%
   filter(ITNuse == 0.50 & ((pfpr == 0.20 & RTSScov %in% c(0, 0.50)) | (pfpr == 0.10 & RTSScov %in% c(0, 0.80)))) %>%
   mutate(scenario2 = 3)
+
 
 # combine
 output <- full_join(output_pfpr, output_itn) %>% full_join(output_rtss) %>%
@@ -1112,35 +1115,48 @@ scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
   mutate(scenario_f = factor(scenario,
                              levels=c(1,2,3,4,5),
                              labels=c('baseline','mass ITN 10% increase', 'mass age-based RTS,S', 'targeted ITN 10% increase', 'targeted age-based RTS,S'))) %>%
-  mutate(
-    clin_inc = cases / n,
-    clin_inc_lower = cases_lower / n,
-    clin_inc_upper = cases_upper / n,
-
-    clin_inc_u5 = u5_cases / n_0_1825,
-    clin_inc_u5_lower = u5_cases_lower / n_0_1825,
-    clin_inc_u5_upper = u5_cases_upper / n_0_1825,
-
-    sev_inc = severe_cases / n,
-    sev_inc_u5 = u5_severe / n_0_1825) %>%
 
   mutate(residence = ifelse(pfpr %in% c(0.20, 0.40), 'rural', 'urban')) %>%
-  dplyr::select(seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, clin_inc:sev_inc_u5) %>%
-  pivot_longer(cols = clin_inc:sev_inc_u5, names_to = 'var', values_to = 'value') %>%
-  mutate(estimate = ifelse(!(grepl('_lower',var) | grepl('_upper',var)), value, NA),
-         lower = ifelse(grepl('_lower',var), value, NA),
-         upper = ifelse(grepl('_upper',var), value, NA),
-         var = case_when(grepl('clin_inc_u5',var) ~ 'clinical incidence <5s',
-                         grepl('clin_inc',var) ~ 'clinical incidence total',
-                         grepl('sev_inc_u5',var) ~ 'severe incidence <5s',
-                         grepl('sev_inc',var) ~ 'severe incidence total')) %>%
-  dplyr::select(-value) %>%
-  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, residence, var) %>%
-  summarize(estimate = mean(estimate, na.rm=T),
-            lower = mean(lower, na.rm=T),
-            upper = mean(upper, na.rm=T),
-            cost_total = mean(cost_total))
 
+  dplyr::select(drawID, seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, daly, cases, deaths) %>%
+
+  arrange(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID, residence) %>%
+  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID) %>%
+
+  mutate(disparity = abs(daly - lag(daly))) %>%
+
+  summarize(across(c(cost_total, cases, deaths, daly, disparity), sum, na.rm = T))
+
+
+none <- scenarios %>% ungroup() %>%
+  filter(scenario == 1) %>%
+  mutate(cost_total_baseline = cost_total,
+         cases_baseline = cases,
+         deaths_baseline = deaths,
+         daly_baseline = daly,
+         disparity_baseline = disparity) %>%
+  dplyr::select(seasonality, scenario2, scenario2_f, drawID, cost_total_baseline:disparity_baseline)
+
+
+scenarios2 <- scenarios %>%
+  left_join(none, by = c("seasonality", "scenario2", "scenario2_f", "drawID")) %>%
+  mutate(cost_diff = cost_total - cost_total_baseline,
+         cases_diff = cases_baseline - cases,
+         deaths_diff = deaths_baseline - deaths,
+         daly_diff = daly_baseline - daly,
+         disparity_diff = disparity - disparity_baseline,
+         CE = cost_diff / daly_diff) %>%
+  ungroup() %>%
+  # summarize over drawID
+  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f) %>%
+  summarize(n = 50,
+            estimate_CE = mean(CE, na.rm = T),
+            lower_CE = estimate_CE - 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
+            upper_CE = estimate_CE + 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
+
+            estimate_disparity = mean(disparity_diff, na.rm = T),
+            lower_dis = estimate_disparity - 1.96 * (sd(disparity_diff, na.rm = T) / sqrt(n)),
+            upper_dis = estimate_disparity + 1.96 * (sd(disparity_diff, na.rm = T) / sqrt(n)))
 
 
 # < primer ----
@@ -1172,16 +1188,31 @@ A <- ggplot() +
   geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
   geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
   geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
-  annotate("text", x = 1, y = 2, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
+  annotate("text", x = 1, y = 2, label = 'CE \u274c \nEquity \u2714', color = 'white') +
   annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
   annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
-  annotate("text", x = 2, y = 1, label = 'CE \u274c \nEquity \u2714', color = 'white') +
-  labs(y = expression(paste(Delta," cost / ", Delta, " DALYs")), x = 'disparity between urban and rural DALYs') +
+  annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
+  labs(y = 'cost-effectiveness', x = 'disparity between urban and rural DALYs') +
   theme_classic() +
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
-B <-
+
+B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
+  geom_vline(xintercept = 0, lty=2, color='grey') +
+  geom_pointrange(aes(x = estimate_disparity / 1000, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
+  geom_pointrange(aes(x = estimate_disparity / 1000, xmin = lower_dis / 1000, xmax = upper_dis / 1000, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
+  labs(y = expression(paste('cost-effectiveness: ', Delta," cost / ", Delta, " DALYs")),
+       x = 'disparity between urban and rural \n(thousands of DALYs)',
+       shape = 'baseline scenario',
+       color = 'intervention') +
+  scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
+  coord_cartesian(xlim = c(-35, 35), ylim = c(0, 200), clip = 'on') +
+  theme_classic()
+
+(A + B) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave(paste0('./03_output/plots_draws/case_study.png'), width=10, height=4)
 
 
 
@@ -1190,3 +1221,30 @@ B <-
 
 
 
+
+test <- scenarios %>%
+  left_join(none, by = c("seasonality", "scenario2", "scenario2_f", "drawID")) %>%
+  mutate(cost_diff = cost_total - cost_total_baseline,
+         cases_diff = cases_baseline - cases,
+         deaths_diff = deaths_baseline - deaths,
+         daly_diff = daly_baseline - daly,
+         disparity_diff = disparity - disparity_baseline,
+         CE = cost_diff / daly_diff) %>%
+  ungroup() %>%
+  # summarize over drawID
+  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f)
+
+test %>% group_by(seasonality, scenario, scenario2) %>%
+  summarize(mean = mean(CE), min = min(CE), max = max(CE))
+
+ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
+  geom_vline(xintercept = 0, lty=2, color='grey') +
+  geom_pointrange(aes(x = estimate_disparity / 1000, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
+  geom_pointrange(aes(x = estimate_disparity / 1000, xmin = lower_dis / 1000, xmax = upper_dis / 1000, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
+  labs(y = expression(paste('cost-effectiveness: ', Delta," cost / ", Delta, " DALYs")),
+       x = 'disparity between urban and rural \n(thousands of DALYs)',
+       shape = 'baseline scenario',
+       color = 'intervention') +
+  scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
+
+  theme_classic()
