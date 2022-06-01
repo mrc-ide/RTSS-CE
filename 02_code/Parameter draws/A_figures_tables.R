@@ -802,7 +802,8 @@ prop_CE <- function(data, var){
     summarize(n = n()) %>%
     ungroup() %>%
     group_by(seasonality, {{var}}) %>%
-    mutate(t = sum(n), p = n / t * 100)
+    mutate(t = sum(n), p = n / t * 100) %>%
+    filter(intervention_f == 'RTS,S')
 }
 
 print(prop_CE(output, sim_length), n = 30) # overall
@@ -811,6 +812,13 @@ print(prop_CE(output, ITNuse), n = 40)
 print(prop_CE(output, resistance), n = 30)
 print(prop_CE(output2, model), n = 40)
 print(prop_CE(output, treatment), n = 30)
+
+output %>%
+  group_by(seasonality, intervention) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  group_by(seasonality) %>%
+  mutate(t = sum(n), p = n / t * 100)
 
 
 # TABLES -----------------------------------------------------------------------
@@ -1144,7 +1152,7 @@ scenarios2 <- scenarios %>%
          cases_diff = cases_baseline - cases,
          deaths_diff = deaths_baseline - deaths,
          daly_diff = daly_baseline - daly,
-         disparity_diff = disparity - disparity_baseline,
+         disparity_per = (disparity - disparity_baseline) / disparity_baseline * 100,
          CE = cost_diff / daly_diff) %>%
   ungroup() %>%
   # summarize over drawID
@@ -1154,9 +1162,9 @@ scenarios2 <- scenarios %>%
             lower_CE = estimate_CE - 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
             upper_CE = estimate_CE + 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
 
-            estimate_disparity = mean(disparity_diff, na.rm = T),
-            lower_dis = estimate_disparity - 1.96 * (sd(disparity_diff, na.rm = T) / sqrt(n)),
-            upper_dis = estimate_disparity + 1.96 * (sd(disparity_diff, na.rm = T) / sqrt(n)))
+            estimate_disparity = mean(disparity_per, na.rm = T),
+            lower_dis = estimate_disparity - 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)),
+            upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)))
 
 
 # < primer ----
@@ -1200,51 +1208,17 @@ A <- ggplot() +
 
 B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
   geom_vline(xintercept = 0, lty=2, color='grey') +
-  geom_pointrange(aes(x = estimate_disparity / 1000, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
-  geom_pointrange(aes(x = estimate_disparity / 1000, xmin = lower_dis / 1000, xmax = upper_dis / 1000, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
+  geom_pointrange(aes(x = estimate_disparity, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
+  geom_pointrange(aes(x = estimate_disparity, xmin = lower_dis, xmax = upper_dis, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
   labs(y = expression(paste('cost-effectiveness: ', Delta," cost / ", Delta, " DALYs")),
-       x = 'disparity between urban and rural \n(thousands of DALYs)',
+       x = 'disparity between urban and rural',
        shape = 'baseline scenario',
        color = 'intervention') +
   scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
-  coord_cartesian(xlim = c(-35, 35), ylim = c(0, 200), clip = 'on') +
+  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
+  coord_cartesian(xlim = c(-40, 40), ylim = c(0, 200), clip = 'on') +
   theme_classic()
 
 (A + B) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
 ggsave(paste0('./03_output/plots_draws/case_study.png'), width=10, height=4)
-
-
-
-
-
-
-
-
-
-test <- scenarios %>%
-  left_join(none, by = c("seasonality", "scenario2", "scenario2_f", "drawID")) %>%
-  mutate(cost_diff = cost_total - cost_total_baseline,
-         cases_diff = cases_baseline - cases,
-         deaths_diff = deaths_baseline - deaths,
-         daly_diff = daly_baseline - daly,
-         disparity_diff = disparity - disparity_baseline,
-         CE = cost_diff / daly_diff) %>%
-  ungroup() %>%
-  # summarize over drawID
-  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f)
-
-test %>% group_by(seasonality, scenario, scenario2) %>%
-  summarize(mean = mean(CE), min = min(CE), max = max(CE))
-
-ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
-  geom_vline(xintercept = 0, lty=2, color='grey') +
-  geom_pointrange(aes(x = estimate_disparity / 1000, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
-  geom_pointrange(aes(x = estimate_disparity / 1000, xmin = lower_dis / 1000, xmax = upper_dis / 1000, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
-  labs(y = expression(paste('cost-effectiveness: ', Delta," cost / ", Delta, " DALYs")),
-       x = 'disparity between urban and rural \n(thousands of DALYs)',
-       shape = 'baseline scenario',
-       color = 'intervention') +
-  scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
-
-  theme_classic()
