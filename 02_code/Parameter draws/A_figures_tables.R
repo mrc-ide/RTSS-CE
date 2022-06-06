@@ -35,7 +35,7 @@ dalyoutput_cost <- readRDS('./03_output/dalyoutput_draws.rds')
 
 test <- dalyoutput_cost %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  # filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   summarize(n = n()) # 2,574 scenarios matches median results
 
 test <- dalyoutput_cost %>%
@@ -46,7 +46,6 @@ test <- dalyoutput_cost %>%
 
 test <- scenarios %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
   summarize(n = n()) # 2,304 scenarios matches median results
 
 
@@ -392,6 +391,7 @@ ggsave(paste0('./03_output/plots_draws/impact_cloud_all.pdf'), width=12, height=
 
 # box and whisker delta cost / delta daly --------------------------------------
 tabledat <- scenarios %>%
+  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   group_by(intervention_f) %>%
   summarize(n=n(),
             median = round(median(CE)),
@@ -403,9 +403,6 @@ tabledat <- scenarios %>%
 
 tabledat; sum(tabledat$n)
 
-# set up text for plot
-text_high <- textGrob("Highest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
-text_low <- textGrob("Lowest\nvalue", gp=gpar(fontsize=13, fontface="bold"))
 
 # set up order of interventions by median CE for plot
 levels <- scenarios %>%
@@ -416,29 +413,39 @@ levels <- scenarios %>%
   arrange(desc(group), med)
 
 # plot of cost per DALY averted
-scenarios %>%
-  mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
-  mutate(rank=as.numeric(intervention_f)) %>%
+box_plot <- function(cost_dose){
+  scenarios %>%
+    filter(cost_per_dose == cost_dose & delivery_cost == 1.62) %>%
+    mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
+    mutate(rank=as.numeric(intervention_f)) %>%
 
-  ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
-  geom_hline(yintercept = 0, lty=2, color='grey') +
-  geom_vline(xintercept = 5.5, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
-  coord_cartesian(ylim=c(-100, 500), clip="off") +
-  labs(x='',
-       y=expression(paste(Delta," cost / ", Delta, " DALYs")),
-       fill = 'intervention',
-       # caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T))),
-       color = 'intervention') +
-  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-150,ymax=-150) +
-  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-150,ymax=-150) +
-  scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
-  scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
-  scale_x_continuous(breaks=c(0)) +
-  theme_classic() +
-  theme(plot.caption.position = "plot")
+    ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
+    geom_hline(yintercept = 0, lty=2, color='grey') +
+    geom_vline(xintercept = 5.5, lty=2, color='grey') +
+    geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
+    coord_cartesian(ylim=c(-100, 500), clip="off") +
+    labs(x='',
+         y=expression(paste(Delta," cost / ", Delta, " DALYs")),
+         fill = 'intervention',
+         # caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T))),
+         color = 'intervention') +
+    annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-150,ymax=-150) +
+    annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-150,ymax=-150) +
+    scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
+    scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
+    scale_x_continuous(breaks=c(0)) +
+    theme_classic() +
+    theme(plot.caption.position = "plot")
 
-ggsave('./03_output/plots_draws/box_whisker_CE.pdf', width=10, height=5)
+  ggsave(paste0('./03_output/plots_draws/box_whisker_CE_', cost_dose, '.pdf'), width=10, height=5)
+
+}
+
+table(scenarios$cost_per_dose)
+
+box_plot(2.69)
+box_plot(6.52)
+box_plot(12.91)
 
 
 # plotting with cost per cases averted
@@ -455,6 +462,7 @@ tabledat <- scenarios %>%
 tabledat; sum(tabledat$n)
 
 scenarios %>% filter(intervention != 'none') %>%
+  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
   mutate(rank=as.numeric(intervention_f)) %>%
 
@@ -462,13 +470,13 @@ scenarios %>% filter(intervention != 'none') %>%
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 5.5, lty=2, color='grey') +
   geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
-  coord_cartesian(ylim=c(-1, 60), clip="off") +
+  coord_cartesian(ylim=c(-1, 80), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " cases")),
        fill = 'intervention',
        color = 'intervention') +
-  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-6,ymax=-6) +
-  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-6,ymax=-6) +
+  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-7,ymax=-7) +
+  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-7,ymax=-7) +
   scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
   scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
   scale_x_continuous(breaks=c(0)) +
@@ -574,6 +582,7 @@ output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
 dose2 <- output2 %>% filter(costRTSS <= 2) %>% top_n(-1) %>% select(p) %>% as.numeric()
 dose5 <- output2 %>% filter(costRTSS <= 5) %>% top_n(-1) %>% select(p) %>% as.numeric()
 dose10 <- output2 %>% filter(costRTSS <= 10) %>% top_n(-1) %>% select(p) %>% as.numeric()
+dose135 <-  output2 %>% filter(costRTSS <= 13.5) %>% top_n(-1) %>% select(p) %>% as.numeric()
 
 table(output$drawID) # 450
 
@@ -582,14 +591,14 @@ output3 <- output %>% ungroup() %>% group_by(drawID) %>% arrange(costRTSS) %>%
   ungroup()
 
 segments <- data.frame(
-  x = c(2, -20, 5, -20, 10, -20),
-  xend = c(2, 2, 5, 5, 10, 10),
-  y = c(-10, dose2, -10, dose5, -10, dose10),
-  yend = c(dose2, dose2, dose5, dose5, dose10, dose10))
+  x = c(2, -20, 5, -20, 10, -20, 13.5, -20),
+  xend = c(2, 2, 5, 5, 10, 10, 13.5, 13.5),
+  y = c(-10, dose2, -10, dose5, -10, dose10, -10, dose135),
+  yend = c(dose2, dose2, dose5, dose5, dose10, dose10, dose135, dose135))
 
 points <- data.frame(
-  x = c(2, 5, 10),
-  y = c(dose2, dose5, dose10)
+  x = c(2, 5, 10, 13.5),
+  y = c(dose2, dose5, dose10, dose135)
 )
 
 B <- ggplot(output3) +
@@ -604,10 +613,10 @@ B <- ggplot(output3) +
   labs(y='% of scenarios where \nRTS,S is most cost-effective',
        x='RTS,S cost per dose (USD)'
   ) +
-  scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 15)) +
-  coord_cartesian(xlim = c(0, 13), ylim = c(0, 100))
+  scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 13.5)) +
+  coord_cartesian(xlim = c(0, 15), ylim = c(0, 100))
 
-ggsave(B, './03_output/plots_draws/RTSS_price_dist_lineplot.pdf', width=6, height=4)
+ggsave('./03_output/plots_draws/RTSS_price_dist_lineplot.pdf', B, width=6, height=4)
 
 # combined plot
 A + B + plot_annotation(tag_levels = 'A')
@@ -1164,7 +1173,14 @@ scenarios2 <- scenarios %>%
 
             estimate_disparity = mean(disparity_per, na.rm = T),
             lower_dis = estimate_disparity - 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)),
-            upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)))
+            upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n))) %>%
+  # put negative cost effectiveness values up to 0
+  mutate(estimate_CE = case_when(estimate_CE < 0 ~ 0,
+                                 TRUE ~ estimate_CE),
+         lower_CE = case_when(estimate_CE == 0 ~ 0,
+                                 TRUE ~ lower_CE),
+         upper_CE = case_when(estimate_CE == 0 ~ 0,
+                                 TRUE ~ upper_CE))
 
 
 # < primer ----
@@ -1200,18 +1216,23 @@ A <- ggplot() +
   annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
   annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
   annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
-  labs(y = 'cost-effectiveness', x = 'disparity between urban and rural DALYs') +
+  labs(y = 'cost-effectiveness', x = 'disparity between urban and rural') +
   theme_classic() +
   theme(axis.ticks = element_blank(),
         axis.text = element_blank())
 
+# adding asterisks to negative CE values
+stars <- scenarios2 %>% filter(estimate_CE == 0) %>%
+  select(estimate_CE, estimate_disparity) %>%
+  mutate(x = estimate_disparity + 2, y = 4)
 
 B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
   geom_vline(xintercept = 0, lty=2, color='grey') +
   geom_pointrange(aes(x = estimate_disparity, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
   geom_pointrange(aes(x = estimate_disparity, xmin = lower_dis, xmax = upper_dis, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
-  labs(y = expression(paste('cost-effectiveness: ', Delta," cost / ", Delta, " DALYs")),
-       x = 'disparity between urban and rural',
+  geom_point(data = stars, aes(x = x, y = y), shape = "*", size = 4, color = "black") +
+  labs(y = expression(paste('cost-effectiveness (', Delta," cost / ", Delta, " DALYs)")),
+       x = 'disparity between urban and rural (% change in DALYs)',
        shape = 'baseline scenario',
        color = 'intervention') +
   scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
