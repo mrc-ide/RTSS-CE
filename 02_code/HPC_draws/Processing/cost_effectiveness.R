@@ -1,17 +1,12 @@
 # Cost effectiveness -----------------------------------------------------------
 
-cost_effectiveness <- function(file){
-
-  count <- file
-
-  # read in a list of all malariasimulation outputs
-  files <- list.files(path = "Q:/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
+cost_effectiveness <- function(x, y){
 
   # create file index
-  index <- c(1:length(files))
+  index <- seq(x, y, 1)
 
-# function for processing HPC data
-cost_effectiveness_b <- function(x){ # input = index of file to process
+  # function for processing HPC data
+  cost_effectiveness_b <- function(x){ # input = index of file to process
 
   # process HPC output: condense by age group over simulation time ----
   output <- HPC_processing(x)
@@ -48,19 +43,12 @@ cost_effectiveness_b <- function(x){ # input = index of file to process
 
   return(output)
 
-}
+  }
 
-# run cost_effectiveness function
-dalyoutput <- map_dfr(index, cost_effectiveness_b)
+  # run cost_effectiveness function
+  dalyoutput <- map_dfr(index, cost_effectiveness_b)
 
-# save output
-saveRDS(dalyoutput, './03_output/dalyoutput_draws.rds')
-
-# calculate cases / DALYs averted
-output <- outcome_averted(dalyoutput)
-
-# save output
-saveRDS(output, './03_output/scenarios_draws.rds')
+  saveRDS(dalyoutput, paste0('./03_output/HPC_processing/run_', x, '_', y, '.rds'))
 
 }
 

@@ -446,6 +446,7 @@ table(scenarios$cost_per_dose)
 box_plot(2.69)
 box_plot(6.52)
 box_plot(12.91)
+box_plot(17.36)
 
 
 # plotting with cost per cases averted
@@ -515,7 +516,10 @@ output <- scenarios %>%
          cost_total = delta_cost + cost_total_baseline,
          cost_vax = cost_total - (cost_ITN + cost_clinical + cost_severe + cost_SMC),
          per_dose = cost_vax / (dose1 + dose2 + dose3 + dose4),
-         costRTSS = per_dose - 1.62   # subtracting delivery cost
+         costRTSScon = per_dose - 1.62,   # subtracting delivery cost
+  # cost = dosecost + 0.11*(dosecost) + 0.163*(dosecost + 0.11*dosecost) + 0.14
+  # (cost - 0.14) / 1.29093 = dose
+         costRTSS = (costRTSScon - 0.14)  / 1.29093  # subtracting consumables cost
   ) %>%
   select(ID, seasonality, pfpr, ITNuse, ITN, RTSS, RTSScov, resistance, SMC, treatment, intervention, interventionmin, CE, CEmin, costRTSS) %>%
   group_by(ID) %>%
@@ -534,20 +538,20 @@ A <- ggplot(output) +
   geom_hline(yintercept = 0, color = 'light grey') +
   geom_boxplot(aes(x = factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y = costRTSS),
                fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .55, nudge_x = -.22) +
+  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .55, nudge_x = -.223) +
   geom_text(data = seasoncosts, aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .55, nudge_x = -.2) +
   geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal'), aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .55, nudge_x = -.2) +
-  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal'), aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = 1.2, nudge_x = -.2) +
+  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal'), aes(x=seasonality, y=q75, label=format(round(q75,2), nsmall = 2)), size = 3, nudge_y = 1.2, nudge_x = -.2) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   theme_classic() +
   labs(y='RTS,S cost (USD) per dose',
        #caption=paste0('range = ', round(min(output$costRTSS)), ' to ', round(max(output$costRTSS)))
        x=''
   ) +
-  coord_cartesian(ylim = c(-15,15)) +
+  coord_cartesian(ylim = c(-15,20)) +
   theme(plot.caption.position = "plot")
 
-ggsave(A, './03_output/plots_draws/RTSS_price_dist_all.pdf', width=6, height=4)
+ggsave('./03_output/plots_draws/RTSS_price_dist_all.pdf', A, width=6, height=4)
 
 
 # table
@@ -572,7 +576,7 @@ output %>% filter(costRTSS >= 5) %>% group_by(pfpr) %>%
   ungroup() %>%
   mutate(t = sum(n), p = n/t * 100)
 
-
+100 - 5.10 - 0.508 - 0.0282
 # < line plot ####
 
 output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
@@ -724,7 +728,95 @@ univariateseason('perennial')
 
 
 # < faceted by season ----------------------------------------------------------
-colors <- c(itn, pbo, rtss_age, rtss_sv, smc)
+stacked_plot <- function(cost_dose){
+
+  colors <- c(itn, pbo, rtss_age, rtss_sv, smc)
+
+  output <- scenarios %>%
+    filter(cost_per_dose == cost_dose & delivery_cost == 1.62) %>%
+    filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
+    mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+    group_by(ID, drawID) %>% arrange(ID, drawID, CE) %>%
+    slice(1L)
+
+
+  # by pfpr
+  A <- ggplot(output) +
+    geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
+    labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    facet_grid(~seasonality) +
+    theme_classic()
+
+  # by current ITN usage
+  B <- ggplot(output) +
+    geom_bar(aes(x=factor(ITNuse), fill=intervention_f), position="fill", show.legend=F) +
+    labs(x='ITN use', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    facet_grid(~seasonality) +
+    theme_classic()
+
+  # by insecticide resistance
+  C <- ggplot(output) +
+    geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill", show.legend=F) +
+    labs(x='Resistance', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    facet_grid(~seasonality) +
+    theme_classic()
+
+  # by ITN distribution efficiency
+  ITNefficient <- function(var, label) {
+    scenarios %>%
+      filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+      filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
+      mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+      group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
+      slice(1L) %>% select(intervention, intervention_f, seasonality, pfpr, {{var}}) %>%
+      mutate(model=label) %>%
+      rename(CE = {{var}})
+  }
+
+  output2 <- ITNefficient(CE, 'standard') %>%
+    full_join(ITNefficient(CE_ITNmin, 'less efficient')) %>%
+    full_join(ITNefficient(CE_ITNmax, 'more efficient'))
+
+
+  D <- ggplot(output2) +
+    geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient'), labels=c('less', 'standard', 'more')), fill=intervention_f), position="fill") +
+    labs(x='ITN efficiency', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+    facet_grid(~seasonality) +
+    theme_classic()
+
+  E <- ggplot(output) +
+    geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend=F) +
+    labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values=colors) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+    facet_grid(~seasonality) +
+    theme_classic()
+
+  legend <- cowplot::get_legend(D)
+
+  Dm <- D + theme(legend.position = "none")
+
+
+  (A + B + C + Dm + E + legend) +
+    plot_layout(nrow = 3) +
+    plot_annotation(tag_levels = list(c('A', 'B', 'C', 'D', 'E', '')))
+
+  ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season_', cost_dose, '.pdf'), width=10, height=8)
+
+}
+
+stacked_plot(2.69)
+stacked_plot(6.52)
+stacked_plot(12.91)
+stacked_plot(17.36)
+
+
+# print out statistics
 
 output <- scenarios %>%
   filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
@@ -733,32 +825,7 @@ output <- scenarios %>%
   group_by(ID, drawID) %>% arrange(ID, drawID, CE) %>%
   slice(1L)
 
-
-# by pfpr
-A <- ggplot(output) +
-  geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
-  labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
-  scale_fill_manual(values=colors) +
-  facet_grid(~seasonality) +
-  theme_classic()
-
-# by current ITN usage
-B <- ggplot(output) +
-  geom_bar(aes(x=factor(ITNuse), fill=intervention_f), position="fill", show.legend=F) +
-  labs(x='ITN use', y='Proportion most \ncost-effective choice', fill='intervention') +
-  scale_fill_manual(values=colors) +
-  facet_grid(~seasonality) +
-  theme_classic()
-
-# by insecticide resistance
-C <- ggplot(output) +
-  geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill", show.legend=F) +
-  labs(x='Resistance', y='Proportion most \ncost-effective choice', fill='intervention') +
-  scale_fill_manual(values=colors) +
-  facet_grid(~seasonality) +
-  theme_classic()
-
-# by ITN distribution efficiency
+  # by ITN distribution efficiency
 ITNefficient <- function(var, label) {
   scenarios %>%
     filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
@@ -773,35 +840,6 @@ ITNefficient <- function(var, label) {
 output2 <- ITNefficient(CE, 'standard') %>%
   full_join(ITNefficient(CE_ITNmin, 'less efficient')) %>%
   full_join(ITNefficient(CE_ITNmax, 'more efficient'))
-
-
-D <- ggplot(output2) +
-  geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient'), labels=c('less', 'standard', 'more')), fill=intervention_f), position="fill") +
-  labs(x='ITN efficiency', y='Proportion most \ncost-effective choice', fill='intervention') +
-  scale_fill_manual(values=colors) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
-  facet_grid(~seasonality) +
-  theme_classic()
-
-E <- ggplot(output) +
-  geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend=F) +
-  labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
-  scale_fill_manual(values=colors) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
-  facet_grid(~seasonality) +
-  theme_classic()
-
-legend <- cowplot::get_legend(D)
-
-Dm <- D + theme(legend.position = "none")
-
-
-(A + B + C + Dm + E + legend) +
-  plot_layout(nrow = 3) +
-  plot_annotation(tag_levels = list(c('A', 'B', 'C', 'D', 'E', '')))
-
-ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season.pdf'), width=10, height=8)
-
 
 prop_CE <- function(data, var){
   data %>%
@@ -850,8 +888,9 @@ scenarios %>%
          CE_cinc = (cost_total2 - cost_total_baseline) / (cases_baseline - cases)) %>%
 
   group_by(cost_per_dose2) %>%
-  summarize(median_d = median(CE_daly), min_d = min(CE_daly), max_d = max(CE_daly),
-            median_c = median(CE_cinc), min_c = min(CE_cinc), max_c = max(CE_cinc))
+  summarize(median_d = median(CE_daly), min_d = min(CE_daly), max_d = max(CE_daly), q25_d = quantile(CE_daly, p = 0.25), q75_d = quantile(CE_daly, p = 0.75),
+            median_c = median(CE_cinc), min_c = min(CE_cinc), max_c = max(CE_cinc), q25_c = quantile(CE_cinc, p = 0.25), q75_c = quantile(CE_cinc, p = 0.75)
+            )
 
 # how many observations - 1 x season, 3 x pfpr, 2 x RTSS, 4 x ITN use
 nrow(scenarios %>%
@@ -1127,7 +1166,7 @@ scenario5 <- output %>%
   filter((pfpr %in% c(0.20, 0.40) & ITNboost==0 & RTSS=='EPI') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
   mutate(scenario=5)
 
-scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
+scenarios1 <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
   full_join(scenario4) %>% full_join(scenario5) %>%
   mutate(scenario_f = factor(scenario,
                              levels=c(1,2,3,4,5),
@@ -1135,111 +1174,135 @@ scenarios <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
 
   mutate(residence = ifelse(pfpr %in% c(0.20, 0.40), 'rural', 'urban')) %>%
 
-  dplyr::select(drawID, seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, daly, cases, deaths) %>%
-
-  arrange(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID, residence) %>%
-  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID) %>%
-
-  mutate(disparity = abs(daly - lag(daly))) %>%
-
-  summarize(across(c(cost_total, cases, deaths, daly, disparity), sum, na.rm = T))
+  dplyr::select(drawID, seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, daly, cases, deaths)
 
 
-none <- scenarios %>% ungroup() %>%
-  filter(scenario == 1) %>%
-  mutate(cost_total_baseline = cost_total,
-         cases_baseline = cases,
-         deaths_baseline = deaths,
-         daly_baseline = daly,
-         disparity_baseline = disparity) %>%
-  dplyr::select(seasonality, scenario2, scenario2_f, drawID, cost_total_baseline:disparity_baseline)
+# make plot for cases, deaths, or DALYs
+plot_equity <- function(var){ # var = cases, deaths, or daly
 
 
-scenarios2 <- scenarios %>%
-  left_join(none, by = c("seasonality", "scenario2", "scenario2_f", "drawID")) %>%
-  mutate(cost_diff = cost_total - cost_total_baseline,
-         cases_diff = cases_baseline - cases,
-         deaths_diff = deaths_baseline - deaths,
-         daly_diff = daly_baseline - daly,
-         disparity_per = (disparity - disparity_baseline) / disparity_baseline * 100,
-         CE = cost_diff / daly_diff) %>%
-  ungroup() %>%
-  # summarize over drawID
-  group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f) %>%
-  summarize(n = 50,
-            estimate_CE = mean(CE, na.rm = T),
-            lower_CE = estimate_CE - 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
-            upper_CE = estimate_CE + 1.96 * (sd(CE, na.rm = T) / sqrt(n)),
+  # calculate disparity between urban and rural
+  scenarios <- scenarios1 %>% arrange(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID, residence) %>%
+    group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID) %>%
 
-            estimate_disparity = mean(disparity_per, na.rm = T),
-            lower_dis = estimate_disparity - 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)),
-            upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n))) %>%
-  # put negative cost effectiveness values up to 0
-  mutate(estimate_CE = case_when(estimate_CE < 0 ~ 0,
-                                 TRUE ~ estimate_CE),
-         lower_CE = case_when(estimate_CE == 0 ~ 0,
-                                 TRUE ~ lower_CE),
-         upper_CE = case_when(estimate_CE == 0 ~ 0,
-                                 TRUE ~ upper_CE))
+    mutate(disparity = abs({{var}} - lag({{var}}))) %>%
 
+    summarize(across(c(cost_total, cases, deaths, daly, disparity), sum, na.rm = T))
 
-# < primer ----
-library(ggforce)
+  # separate out and label baseline values
+  none <- scenarios %>% ungroup() %>%
+    filter(scenario == 1) %>%
+    mutate(cost_total_baseline = cost_total,
+           outcome_baseline = {{var}},
+           disparity_baseline = disparity) %>%
+    dplyr::select(seasonality, scenario2, scenario2_f, drawID, cost_total_baseline:disparity_baseline)
 
-a <- data.frame(
-  x = c(0.5, 0.5, 1.5, 1.5),
-  y = c(1.5, 2.5, 2.5, 1.5)
-)
+  # merge baseline and non-baseline scenarios and calculate difference
+  scenarios2 <- scenarios %>%
+    left_join(none, by = c("seasonality", "scenario2", "scenario2_f", "drawID")) %>%
+    mutate(cost_diff = cost_total - cost_total_baseline,
+           outcome_diff = outcome_baseline - {{var}},
+           disparity_per = (disparity - disparity_baseline) / disparity_baseline * 100,
+           CE_outcome = cost_diff / outcome_diff) %>%
+    ungroup() %>%
+    # summarize over drawID
+    group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f) %>%
+    summarize(n = 50,
+              estimate_CE = mean(CE_outcome, na.rm = T),
+              lower_CE = estimate_CE - 1.96 * (sd(CE_outcome, na.rm = T) / sqrt(n)),
+              upper_CE = estimate_CE + 1.96 * (sd(CE_outcome, na.rm = T) / sqrt(n)),
 
-b <- data.frame(
-  x = c(1.5, 1.5, 2.5, 2.5),
-  y = c(1.5, 2.5, 2.5, 1.5)
-)
+              estimate_disparity = mean(disparity_per, na.rm = T),
+              lower_dis = estimate_disparity - 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)),
+              upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n))) %>%
+    # put negative cost effectiveness values up to 0
+    mutate(estimate_CE = case_when(estimate_CE < 0 ~ 0,
+                                   TRUE ~ estimate_CE),
+           lower_CE = case_when(estimate_CE == 0 ~ 0,
+                                   TRUE ~ lower_CE),
+           upper_CE = case_when(estimate_CE == 0 ~ 0,
+                                   TRUE ~ upper_CE))
 
-c <- data.frame(
-  x = c(0.5, 0.5, 1.5, 1.5),
-  y = c(0.5, 1.5, 1.5, 0.5)
-)
+  # < primer ----
+  library(ggforce)
 
-d <- data.frame(
-  x = c(1.5, 1.5, 2.5, 2.5),
-  y = c(0.5, 1.5, 1.5, 0.5)
-)
+  a <- data.frame(
+    x = c(0.5, 0.5, 1.5, 1.5),
+    y = c(1.5, 2.5, 2.5, 1.5)
+  )
 
+  b <- data.frame(
+    x = c(1.5, 1.5, 2.5, 2.5),
+    y = c(1.5, 2.5, 2.5, 1.5)
+  )
 
-A <- ggplot() +
-  geom_shape(data = a, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
-  geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
-  geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
-  geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
-  annotate("text", x = 1, y = 2, label = 'CE \u274c \nEquity \u2714', color = 'white') +
-  annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
-  annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
-  annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
-  labs(y = 'cost-effectiveness', x = 'disparity between urban and rural') +
-  theme_classic() +
-  theme(axis.ticks = element_blank(),
-        axis.text = element_blank())
+  c <- data.frame(
+    x = c(0.5, 0.5, 1.5, 1.5),
+    y = c(0.5, 1.5, 1.5, 0.5)
+  )
 
-# adding asterisks to negative CE values
-stars <- scenarios2 %>% filter(estimate_CE == 0) %>%
-  select(estimate_CE, estimate_disparity) %>%
-  mutate(x = estimate_disparity + 2, y = 4)
+  d <- data.frame(
+    x = c(1.5, 1.5, 2.5, 2.5),
+    y = c(0.5, 1.5, 1.5, 0.5)
+  )
 
-B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
-  geom_vline(xintercept = 0, lty=2, color='grey') +
-  geom_pointrange(aes(x = estimate_disparity, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
-  geom_pointrange(aes(x = estimate_disparity, xmin = lower_dis, xmax = upper_dis, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
-  geom_point(data = stars, aes(x = x, y = y), shape = "*", size = 4, color = "black") +
-  labs(y = expression(paste('cost-effectiveness (', Delta," cost / ", Delta, " DALYs)")),
-       x = 'disparity between urban and rural (% change in DALYs)',
-       shape = 'baseline scenario',
-       color = 'intervention') +
-  scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
-  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
-  coord_cartesian(xlim = c(-40, 40), ylim = c(0, 200), clip = 'on') +
-  theme_classic()
+  A <- ggplot() +
+    geom_shape(data = a, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+    geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
+    geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
+    geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+    annotate("text", x = 1, y = 2, label = 'CE \u274c \nEquity \u2714', color = 'white') +
+    annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
+    annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
+    annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
+    labs(y = 'cost-effectiveness', x = 'disparity between urban and rural') +
+    theme_classic() +
+    theme(axis.ticks = element_blank(),
+          axis.text = element_blank())
 
-(A + B) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+  # adding asterisks to negative CE values
+  stars <- scenarios2 %>% filter(estimate_CE == 0) %>%
+    select(estimate_CE, estimate_disparity) %>%
+    mutate(x = estimate_disparity + 2, y = 4)
 
-ggsave(paste0('./03_output/plots_draws/case_study.png'), width=10, height=4)
+  if(deparse(substitute(var)) == 'daly'){
+    name <- 'DALYs'
+    xlim <- c(-40, 40)
+    ylim <- c(0, 200)
+    }
+  if(deparse(substitute(var)) == 'cases'){
+    name <- 'cases'
+    xlim <- c(-25, 10)
+    ylim <- c(0, 59)
+    }
+  if(deparse(substitute(var)) == 'deaths'){
+    name <- 'deaths'
+    xlim <- c(min(scenarios2$lower_dis), max(scenarios2$upper_dis))
+    ylim <- c(min(scenarios2$lower_CE), max(scenarios2$upper_CE))
+    }
+
+  B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
+    geom_vline(xintercept = 0, lty=2, color='grey') +
+    geom_pointrange(aes(x = estimate_disparity, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
+    geom_pointrange(aes(x = estimate_disparity, xmin = lower_dis, xmax = upper_dis, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
+    geom_point(data = stars, aes(x = x, y = y), shape = "*", size = 4, color = "black") +
+    labs(y = expr(paste('cost-effectiveness (', Delta," cost / ", Delta, " ", !!name, ")")),
+         x = paste0('disparity between urban and rural (% change in ', name, ')'),
+         shape = 'baseline scenario',
+         color = 'intervention') +
+    scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
+    scale_x_continuous(labels = scales::percent_format(scale = 1)) +
+    coord_cartesian(xlim = xlim, ylim = ylim, clip = 'on') +
+    theme_classic()
+
+  plot <- (A + B) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+  ggsave(paste0('./03_output/plots_draws/case_study_', name, '.png'), plot = plot, width=10, height=4)
+
+}
+
+# plot cases, deaths, or DALYs
+plot_equity(cases)
+plot_equity(deaths)
+plot_equity(daly)
+

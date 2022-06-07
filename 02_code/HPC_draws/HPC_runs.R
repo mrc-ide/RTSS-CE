@@ -171,10 +171,31 @@ map2_dfr(seq(0, nrow(index) - 100, 100),
 
 
 # Processing -------------------------------------------------------------------
+index <- seq(1, nrow(combo), 1)
+
+x <- seq(1, length(index) - 1000, 1000)
+y <- seq(1000, length(index), 1000)
+
+data <- tibble(x, y)
+data <- rbind(data, c(128001, length(index))) # add final row
+
+t <- obj$enqueue_bulk(data[1,], cost_effectiveness)
+
 
 # read in all parameter draw runs and process
-t <- obj$enqueue(cost_effectiveness(1))
-t$status()
+files <- list.files(path = "M:/Hillary/GF-RTSS-CE/03_output/HPC_processing/", pattern = "run*", full.names = TRUE)
+dat_list <- lapply(files, function (x) readRDS(x))
+dalyoutput <- rbindlist(dat_list, fill = TRUE, idcol="identifier")
+
+# save output
+saveRDS(dalyoutput, 'M:/Hillary/GF-RTSS-CE/03_output/dalyoutput_draws.rds')
+
+# calculate cases / DALYs averted
+source('M:/Hillary/GF-RTSS-CE/02_code/HPC_draws/Processing/outcome_averted.R')
+output <- outcome_averted(dalyoutput)
+
+# save output
+saveRDS(output, 'M:/Hillary/GF-RTSS-CE/03_output/scenarios_draws.rds')
 
 
 
