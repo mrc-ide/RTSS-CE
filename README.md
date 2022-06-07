@@ -2,7 +2,7 @@
 Strategic resource allocation to maximize the impact of malaria response.
 
 ## Objectives
-:one: To evaluate the relative cost-effectiveness and related uncertainty of introducing the RTS,S compared to scale-up of existing malaria interventions especially in settings where scale up of conventional interventions has not been achieved or where there is a risk of coverage slipping as the vaccine is being introduced, including addressing parameters such as variation by vaccine delivery mode across different settings (EPI, seasonal, hybrid).
+:one: To evaluate the relative cost-effectiveness and related uncertainty of introducing the RTS,S compared to scale-up of existing malaria interventions especially in settings where scale up of conventional interventions has not been achieved or where there is a risk of coverage slipping as the vaccine is being introduced, including addressing parameters such as variation by vaccine delivery mode across different settings (age-based, seasonal).
   
    - As part of a threshold analysis: what is the minimum cost per fully vaccinated child to make the vaccine cost-effective compared to scaling existing malaria interventions for a given country setting?  
 
@@ -24,13 +24,21 @@ Strategic resource allocation to maximize the impact of malaria response.
 ├── 01_data                                # Data files
 ├── 02_code                                # R code file
 |   ├── HPC_draws                          # HPC runs for parameter draws
-|   |   ├── A_PfPR_EIR_match.R               # Match PfPR to EIR
-|   |   ├── B_HPC_runs.R                     # HPC runs
+|   |   ├── A_parameter_draws.R              # List parameters for each draw
+|   |   ├── B_PfPR_EIR_match.R               # Match PfPR to EIR
+|   |   ├── C_HPC_runs.R                     # HPC runs
 |   |   ├── function_draws.R                 # Functions for HPC
 |   |   ├── Processing                     # Data processing
-|   |   |   ├── A_HPC_processing.R           # Process HPC output
+|   |   |   ├── cost_effectiveness.R         # Process CE
+|   |   |   ├── HPC_processing.R             # Helper-function HPC output
 |   |   |   ├── add_costs.R                  # Helper-function add costs
-|   |   |   ├── cost_effectiveness.R         # Helper-function calc CE
+|   |   |   ├── deaths_dalys.R               # Helper-function calc deaths & DALYs
+|   |   |   ├── netz_dist.R                  # Helper-function calc nets distributed
+|   |   |   ├── outcome_averted.R            # Helper-function calc DALYs and cases averted
+|   |   ├── Processing_casestudy           # Data processing - case study
+|   |   |   ├── cost_effectiveness.R         # Process CE
+|   |   |   ├── HPC_processing.R             # Helper-function HPC output
+|   |   |   ├── add_costs.R                  # Helper-function add costs
 |   |   |   ├── deaths_dalys.R               # Helper-function calc deaths & DALYs
 |   |   |   ├── netz_dist.R                  # Helper-function calc nets distributed
 |   |   |   ├── outcome_averted.R            # Helper-function calc DALYs and cases averted
@@ -40,7 +48,6 @@ Strategic resource allocation to maximize the impact of malaria response.
 |   |   ├── C_HPC_processing.R               # Process model output
 |   |   ├── D_HPC_case_studies.R             # Process model output
 |   |   ├── functions.R                      # Functions for HPC
-|   |   ├── parameter_draws.R                # List parameters for each draw
 |   ├── Median                             # Analysis: median parameter values
 |   |   ├── A_cost_effectiveness.R           # Cost-effectiveness code
 |   |   ├── B_DHS_analysis.R                 # DHS data for case studies
