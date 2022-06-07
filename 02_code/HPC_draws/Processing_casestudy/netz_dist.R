@@ -13,7 +13,7 @@ netz_dist <- function(x  # observed use rate
                   ) {
 
   output <- convert_usage_to_annual_nets_distributed(
-    target_usage = c(0, 0.10, 0.25, 0.35, 0.50, 0.60, 0.75, 0.85),
+    target_usage = c(0, 0.10, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60, 0.70, 0.75, 0.85),
     distribution_freq = 3 * 365, # every three years
     use_rate_data = x,
     half_life_data = median(nets_data$half_life_data$half_life),

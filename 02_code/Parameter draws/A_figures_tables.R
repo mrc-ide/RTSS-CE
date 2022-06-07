@@ -48,6 +48,8 @@ test <- scenarios %>%
   group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
   summarize(n = n()) # 2,304 scenarios matches median results
 
+table(scenarios$cost_per_dose)
+
 
 # delta CE change --------------------------------------------------------------
 
@@ -105,7 +107,7 @@ deltaseason <- function(season) {
   }
 
   if(season=='highly seasonal'){
-    colors <- c(itn, rtss_age, rtss_sv, itn_rtss)
+    colors <- c(itn, rtss_sv, itn_rtss)
   }
 
   if(season=='seasonal'){
@@ -576,7 +578,7 @@ output %>% filter(costRTSS >= 5) %>% group_by(pfpr) %>%
   ungroup() %>%
   mutate(t = sum(n), p = n/t * 100)
 
-100 - 5.10 - 0.508 - 0.0282
+
 # < line plot ####
 
 output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
@@ -610,8 +612,8 @@ B <- ggplot(output3) +
   geom_segment(data = segments,
                aes(x = x, xend = xend, y = y, yend = yend),
                lty = 3, color = 'grey') +
-  geom_line(aes(x = costRTSS, y = p, group = drawID), color = '#619CFF', size = 1, alpha = 0.1) +
-  geom_line(data = output2, aes(x = costRTSS, y = p, group = drawID), color = '#619CFF', size = 1) +
+  geom_line(aes(x = costRTSS, y = p, group = drawID), color = 'cornflower blue', size = 1, alpha = 0.1) +
+  geom_line(data = output2, aes(x = costRTSS, y = p, group = drawID), color = 'cornflower blue', size = 1) +
   geom_point(data = points, aes(x = x, y = y), color = 'blue', size = 2) +
   theme_classic() +
   labs(y='% of scenarios where \nRTS,S is most cost-effective',
@@ -767,7 +769,7 @@ stacked_plot <- function(cost_dose){
   # by ITN distribution efficiency
   ITNefficient <- function(var, label) {
     scenarios %>%
-      filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+      filter(cost_per_dose==cost_dose & delivery_cost==1.62) %>%
       filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
       mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
       group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
@@ -939,12 +941,12 @@ summary(output2$deltacases / (2*15)) # additional cases averted per year in a po
 summary(output2$CE_u5) # additional cases averted per year in a population of 100,000 people
 
 ggplot(data = output2) +
-  geom_boxplot(aes(x=pfpr, y=deltadaly / (2*15), alpha = 0.3, group = pfpr), show.legend = F, fill = '#619CFF', color = '#619CFF') +
+  geom_boxplot(aes(x=pfpr, y=deltadaly / (2*15), alpha = 0.3, group = pfpr), show.legend = F, fill = '#619CFF', color = '#619CFF', outlier.alpha = 0.05,  outlier.size = 0.05) +
   facet_grid(~factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) +
   labs(x = 'PfPR', y = 'DALYs averted', title = 'DALYS averted per year per 100,000 people') +
   theme_classic()
 
-ggsave('./03_output/RTSS_additional_impact.pdf', width=6, height=3)
+ggsave('./03_output/plots_draws/RTSS_additional_impact.pdf', width=6, height=3)
 
 
 
@@ -1123,7 +1125,11 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
 # CASE STUDY -------------------------------------------------------------------
 
 output <- readRDS('./03_output/dalyoutput_draws_casestudy.rds') %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62)
+  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% ungroup()
+
+test <- output %>% filter(is.na(cost_total))
+
+summary(output$cost_total)
 
 # gap in PfPR
 output_pfpr <- output %>%
@@ -1166,27 +1172,22 @@ scenario5 <- output %>%
   filter((pfpr %in% c(0.20, 0.40) & ITNboost==0 & RTSS=='EPI') | (pfpr %in% c(0.10) & ITNboost==0 & RTSS=='none')) %>%
   mutate(scenario=5)
 
-scenarios1 <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
+scenariosb <- full_join(scenario1, scenario2) %>% full_join(scenario3) %>%
   full_join(scenario4) %>% full_join(scenario5) %>%
   mutate(scenario_f = factor(scenario,
                              levels=c(1,2,3,4,5),
                              labels=c('baseline','mass ITN 10% increase', 'mass age-based RTS,S', 'targeted ITN 10% increase', 'targeted age-based RTS,S'))) %>%
-
   mutate(residence = ifelse(pfpr %in% c(0.20, 0.40), 'rural', 'urban')) %>%
-
   dplyr::select(drawID, seasonality, scenario, scenario_f, scenario2, scenario2_f, residence, cost_total, daly, cases, deaths)
 
 
 # make plot for cases, deaths, or DALYs
 plot_equity <- function(var){ # var = cases, deaths, or daly
 
-
   # calculate disparity between urban and rural
-  scenarios <- scenarios1 %>% arrange(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID, residence) %>%
+  scenarios <- scenariosb %>% arrange(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID, residence) %>%
     group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f, drawID) %>%
-
     mutate(disparity = abs({{var}} - lag({{var}}))) %>%
-
     summarize(across(c(cost_total, cases, deaths, daly, disparity), sum, na.rm = T))
 
   # separate out and label baseline values
@@ -1223,43 +1224,6 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
            upper_CE = case_when(estimate_CE == 0 ~ 0,
                                    TRUE ~ upper_CE))
 
-  # < primer ----
-  library(ggforce)
-
-  a <- data.frame(
-    x = c(0.5, 0.5, 1.5, 1.5),
-    y = c(1.5, 2.5, 2.5, 1.5)
-  )
-
-  b <- data.frame(
-    x = c(1.5, 1.5, 2.5, 2.5),
-    y = c(1.5, 2.5, 2.5, 1.5)
-  )
-
-  c <- data.frame(
-    x = c(0.5, 0.5, 1.5, 1.5),
-    y = c(0.5, 1.5, 1.5, 0.5)
-  )
-
-  d <- data.frame(
-    x = c(1.5, 1.5, 2.5, 2.5),
-    y = c(0.5, 1.5, 1.5, 0.5)
-  )
-
-  A <- ggplot() +
-    geom_shape(data = a, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
-    geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
-    geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
-    geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
-    annotate("text", x = 1, y = 2, label = 'CE \u274c \nEquity \u2714', color = 'white') +
-    annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
-    annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
-    annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
-    labs(y = 'cost-effectiveness', x = 'disparity between urban and rural') +
-    theme_classic() +
-    theme(axis.ticks = element_blank(),
-          axis.text = element_blank())
-
   # adding asterisks to negative CE values
   stars <- scenarios2 %>% filter(estimate_CE == 0) %>%
     select(estimate_CE, estimate_disparity) %>%
@@ -1281,7 +1245,7 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
     ylim <- c(min(scenarios2$lower_CE), max(scenarios2$upper_CE))
     }
 
-  B <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
+   plot <- ggplot(data = scenarios2 %>% filter(scenario > 1)) + # remove baseline
     geom_vline(xintercept = 0, lty=2, color='grey') +
     geom_pointrange(aes(x = estimate_disparity, y = estimate_CE, ymin = lower_CE, ymax = upper_CE, shape = scenario2_f, color = scenario_f)) +
     geom_pointrange(aes(x = estimate_disparity, xmin = lower_dis, xmax = upper_dis, y = estimate_CE, shape = scenario2_f, color = scenario_f)) +
@@ -1292,17 +1256,90 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
          color = 'intervention') +
     scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
     scale_x_continuous(labels = scales::percent_format(scale = 1)) +
-    coord_cartesian(xlim = xlim, ylim = ylim, clip = 'on') +
+    coord_cartesian(xlim = xlim, ylim = ylim, clip = 'off') +
     theme_classic()
 
-  plot <- (A + B) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
-
-  ggsave(paste0('./03_output/plots_draws/case_study_', name, '.png'), plot = plot, width=10, height=4)
+   return(plot)
 
 }
 
-# plot cases, deaths, or DALYs
-plot_equity(cases)
-plot_equity(deaths)
-plot_equity(daly)
+# plot primer
 
+library(ggforce)
+
+a <- data.frame(
+  x = c(0.5, 0.5, 1.5, 1.5),
+  y = c(1.5, 2.5, 2.5, 1.5)
+)
+
+b <- data.frame(
+  x = c(1.5, 1.5, 2.5, 2.5),
+  y = c(1.5, 2.5, 2.5, 1.5)
+)
+
+c <- data.frame(
+  x = c(0.5, 0.5, 1.5, 1.5),
+  y = c(0.5, 1.5, 1.5, 0.5)
+)
+
+d <- data.frame(
+  x = c(1.5, 1.5, 2.5, 2.5),
+  y = c(0.5, 1.5, 1.5, 0.5)
+)
+
+A <- ggplot() +
+  geom_shape(data = a, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+  geom_shape(data = b, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'tomato1', alpha = .95) +
+  geom_shape(data = c, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'chartreuse4', alpha = 0.8) +
+  geom_shape(data = d, aes(x = x, y = y), expand = unit(-.2, 'cm'), radius = unit(0.5, 'cm'), fill = 'grey', alpha = 0.9) +
+  annotate("text", x = 1, y = 2, label = 'CE \u274c \nEquity \u2714', color = 'white') +
+  annotate("text", x = 2, y = 2, label = 'CE \u274c \nEquity \u274c', color = 'white') +
+  annotate("text", x = 1, y = 1, label = 'CE \u2714 \nEquity \u2714', color = 'white') +
+  annotate("text", x = 2, y = 1, label = 'CE \u2714 \nEquity \u274c', color = 'white') +
+  labs(y = 'cost-effectiveness', x = 'disparity between urban and rural') +
+  theme_classic() +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+
+# plot cases, deaths, or DALYs
+B <- plot_equity(daly)
+C <- plot_equity(cases)
+D <- plot_equity(deaths)
+
+plot <- (A + B + C) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave(paste0('./03_output/plots_draws/case_study_', 'ABC', '.png'), plot = plot, width=10, height=4)
+
+
+
+P1 <- B + geom_hline(yintercept = 0, lty=2, color='grey') +
+  labs(y = 'more cost-effective',
+       x = 'more equitable',
+       title = 'DALYs',
+       shape = 'baseline scenario',
+       color = 'intervention') +
+  geom_segment(aes(x = 40, xend = -40, y = -25, yend = -25),
+               arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
+  geom_segment(aes(x = -47, xend = -47, y = 200, yend = 18),
+               arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
+  scale_x_continuous(breaks = c(0)) +
+  scale_y_continuous(breaks = c(0))
+
+P2 <- C + geom_hline(yintercept = 0, lty=2, color='grey') +
+  labs(y = 'more cost-effective',
+       x = 'more equitable',
+       title = 'cases',
+       shape = 'baseline scenario',
+       color = 'intervention') +
+  geom_segment(aes(x = 10, xend = -25, y = -7.1, yend = -7.1),
+               arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
+  geom_segment(aes(x = -28, xend = -28, y = 60, yend = 5),
+               arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
+  scale_x_continuous(breaks = c(0)) +
+  scale_y_continuous(breaks = c(0))
+
+
+plot <- (P1 + P2) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+
+ggsave(paste0('./03_output/plots_draws/case_study_', 'arrows', '.png'), width = 10, height = 4)
