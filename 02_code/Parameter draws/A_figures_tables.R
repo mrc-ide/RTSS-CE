@@ -6,73 +6,60 @@ library(patchwork)
 library(grid)
 library(LaCroixColoR)
 
-# color palette
-# lacroix_palette(type = "paired")
-# c("#C70E7B", "#FC6882","#007BC3","#54BCD1","#EF7C12","#F4B95A","#009F3F","#8FDA04",
-#   "#AF6125","#F4E3C7","#B25D91","#EFC7E6", "#EF7C12","#F4B95A")
-# RColorBrewer::display.brewer.pal(12, "Paired")
-
-# assign scenarios colors
-smc <- "#FC6882"
-pbo <- "#007BC3"
-itn <- "#54BCD1"
-rtss_sv <- "#009F3F"
-rtss_age <- "#54E356"
-pbo_smc <- "#C70E7B"
-itn_smc <- "#B25D91"
-rtss_smc <- "#EFC7E6"
-pbo_rtss_smc <- "#AF6125"
-itn_rtss_smc <- "#F5DD42"
-pbo_rtss <- "#EF7C12"
-itn_rtss <- "#F4B95A"
-
 # devtools::install_github('mrc-ide/malariasimulation@dev', force=TRUE)
 # devtools::install_github('johannesbjork/LaCroixColoR')
 
+# color palette
+# lacroix_palette(type = "paired")
+
+# assign scenarios colors
+smc          <- "#FC6882"
+pbo          <- "#007BC3"
+itn          <- "#54BCD1"
+rtss_sv      <- "#009F3F"
+rtss_age     <- "#54E356"
+pbo_smc      <- "#C70E7B"
+itn_smc      <- "#B25D91"
+rtss_smc     <- "#EFC7E6"
+pbo_rtss_smc <- "#AF6125"
+itn_rtss_smc <- "#F5DD42"
+pbo_rtss     <- "#EF7C12"
+itn_rtss     <- "#F4B95A"
+
 # load data
-scenarios <- readRDS('./03_output/scenarios_draws.rds')
-dalyoutput_cost <- readRDS('./03_output/dalyoutput_draws.rds')
+scenarios <- readRDS('./03_output/scenarios_draws.rds') %>%
+  # remove scenarios with a negative impact on DALYs
+  mutate(dalydiff = daly_baseline - daly) %>%
+  filter(dalydiff >= 0)
 
-test <- dalyoutput_cost %>%
-  group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
-  # filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
-  summarize(n = n()) # 2,574 scenarios matches median results
-
-test <- dalyoutput_cost %>%
-  filter(ITNboost==0 & ITN=='pyr' & RTSS=='none' & # filter out interventions
-           (SMC==0 | (seasonality=='highly seasonal'))) %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
-  summarize(n = n()); nrow(test) / 50 # 270 baseline scenarios matches median results
-
-test <- scenarios %>%
-  group_by(ID, pfpr, seasonality, treatment, resistance, ITN, ITNuse, ITNboost, SMC, RTSS) %>%
+readRDS('./03_output/scenarios_draws.rds') %>%
+  group_by(ID, ITN, ITNboost, SMC, RTSS) %>%
   summarize(n = n()) # 2,304 scenarios matches median results
 
-table(scenarios$cost_per_dose)
 
 
 # delta CE change --------------------------------------------------------------
 
-# < by season ------------------------------
+# < plot by season  -----------------
 
-supp.labs <- c("ITN use: 0", "ITN use: 0.25", "ITN use: 0.50", "ITN use: 0.75")
-names(supp.labs) <- c(0,.25,.50,.75)
-
-deltaseason <- function(season) {
+deltaseason <- function(season){
 
   output <- scenarios %>%
-    filter(seasonality==season) %>%
-    filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
-    filter(intervention!='none') %>%
+    filter(seasonality == season) %>%
+    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+    filter(resistance == 0) %>%
+    filter(intervention != 'none') %>%
+
     mutate(deltadaly = daly_baseline - daly,
            deltacost = cost_total - cost_total_baseline,
-           cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly) %>%
+           cost_daly_averted = deltacost / deltadaly) %>%
+
     group_by(ID, seasonality, intervention, intervention_f) %>%
     summarize(deltadaly = median(deltadaly),
-           deltacost = median(deltacost),
-           cost_daly_averted = median(cost_daly_averted))
+              deltacost = median(deltacost),
+              cost_daly_averted = median(cost_daly_averted))
 
-  # All interventions, by baseline ITNuse and seasonality
+  # all interventions, by baseline ITNuse and seasonality
   output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% boost','ITN PBO','RTS,S EPI','RTS,S SV','ITN 10% boost + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% boost + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% boost + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
 
   # assign colors
@@ -133,7 +120,7 @@ deltaseason <- function(season) {
                                 deltadaly < lag(deltadaly,n=2L) ~ 1,
                                 deltadaly < lag(deltadaly,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
+    filter(dominate == 0) %>%
     # marking extended dominated strategies
     mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
            dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
@@ -149,7 +136,7 @@ deltaseason <- function(season) {
                                 ICER > lead(ICER,n=2L) ~ 1,
                                 ICER > lead(ICER,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
+    filter(dominate == 0) %>%
     # loop through extendedly dominated strategies again
     mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
            dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
@@ -165,7 +152,7 @@ deltaseason <- function(season) {
                                 ICER > lead(ICER,n=2L) ~ 1,
                                 ICER > lead(ICER,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
+    filter(dominate == 0) %>%
     mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
            dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
                                 ICER > lead(ICER,n=11L) ~ 1,
@@ -180,7 +167,7 @@ deltaseason <- function(season) {
                                 ICER > lead(ICER,n=2L) ~ 1,
                                 ICER > lead(ICER,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
+    filter(dominate == 0) %>%
     mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
            dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
                                 ICER > lead(ICER,n=11L) ~ 1,
@@ -195,7 +182,7 @@ deltaseason <- function(season) {
                                 ICER > lead(ICER,n=2L) ~ 1,
                                 ICER > lead(ICER,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
+    filter(dominate == 0) %>%
     mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
            dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
                                 ICER > lead(ICER,n=11L) ~ 1,
@@ -210,27 +197,29 @@ deltaseason <- function(season) {
                                 ICER > lead(ICER,n=2L) ~ 1,
                                 ICER > lead(ICER,n=1L) ~ 1,
                                 TRUE ~ 0)) %>%
-    filter(dominate==0) %>%
-    ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
-    geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5) +
-    geom_point(aes(color=intervention_f), size=2, show.legend = F) +
-    geom_hline(yintercept = 0, lty=2, color="black") +
-    geom_vline(xintercept = 0, lty=2, color="black") +
-    #facet_grid(~ITNuse, labeller = labeller(ITNuse=supp.labs), scales = "free") +
-    theme_classic() +
-    scale_color_manual(values = colors) +
-    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    labs(title='Dominated strategies removed',
-         y='change in cost (USD)',
-         x='change in DALYs averted',
-         color='intervention',
-         caption='Assuming resistance == 0') +
-    theme(plot.caption.position = "plot")
+    filter(dominate == 0) %>%
 
-  A + B + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+    ggplot(mapping = aes(x = deltadaly, y = deltacost)) +
+      geom_line(aes(group = as.factor(ID)), color = 'lightgrey', size = .5) +
+      geom_point(aes(color = intervention_f), size=2, show.legend = F) +
+      geom_hline(yintercept = 0, lty=2, color = "black") +
+      geom_vline(xintercept = 0, lty=2, color = "black") +
+      theme_classic() +
+      scale_color_manual(values = colors) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(title = 'Dominated strategies removed',
+           y = 'change in cost (USD)',
+           x = 'change in DALYs averted',
+           color = 'intervention',
+           caption = 'Assuming resistance == 0') +
+      theme(plot.caption.position = "plot")
+
+  A + B + plot_layout(guides = "collect", nrow = 1) +
+    plot_annotation(tag_levels = 'A')
 
   # ggsave(paste0('./03_output/impact_cloud_',season,'.pdf'), width=10, height=6)
-  ggsave(paste0('./03_output/plots_draws/impact_cloud_',season,'.pdf'), width=12, height=5)
+  ggsave(paste0('./03_output/plots_draws/impact_cloud_',season,'.pdf'),
+         width = 12, height = 5)
 
 }
 
@@ -240,38 +229,41 @@ deltaseason('perennial')
 
 
 # < facet by season -----------------
+
+# calculate median change in DALYs and median change in cost
 output <- scenarios %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% filter(resistance==0) %>%
-  filter(intervention!='none') %>%
+  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(resistance == 0) %>%
+  filter(intervention != 'none') %>%
+
   mutate(deltadaly = daly_baseline - daly,
          deltacost = cost_total - cost_total_baseline,
-         cost_daly_averted = (cost_total - cost_total_baseline) / deltadaly) %>%
-  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+         cost_daly_averted = deltacost / deltadaly,
+         seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+
   group_by(ID, seasonality, intervention, intervention_f) %>%
   summarize(deltadaly = median(deltadaly),
             deltacost = median(deltacost),
             cost_daly_averted = median(cost_daly_averted))
 
-# All interventions, by baseline ITNuse and seasonality
-output <- output %>% mutate(intervention2 = factor(intervention, levels = c('ITN 10% increase','ITN PBO','RTS,S age-based','RTS,S seasonal','ITN 10% increase + RTS,S','ITN PBO + RTS,S','SMC','ITN 10% increase + SMC','ITN PBO + SMC', 'RTS,S + SMC', 'ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC')))
-
-
+# list color order for plots
 colors <- c(itn, rtss_age, rtss_sv, smc, itn_rtss, itn_smc, rtss_smc, itn_rtss_smc)
 
-
-A <- ggplot(data = output, mapping=aes(x=deltadaly, y=deltacost)) +
-  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5, alpha=0.2) +
-  geom_point(aes(color=intervention_f), size=2, alpha=0.6) +
-  geom_hline(yintercept = 0, lty=2, color="black") +
-  geom_vline(xintercept = 0, lty=2, color="black") +
-  facet_grid(~seasonality, scales = "free") +
+# plot all interventions, by baseline ITNuse and seasonality
+A <- ggplot(data = output, aes(x = deltadaly, y = deltacost)) +
+  geom_line(aes(group = as.factor(ID)), color = 'lightgrey',
+            size = .5, alpha = 0.2) +
+  geom_point(aes(color = intervention_f), size = 2, alpha = 0.6) +
+  geom_hline(yintercept = 0, lty = 2, color = "black") +
+  geom_vline(xintercept = 0, lty = 2, color = "black") +
+  facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  labs(title='All strategies',
-       y='change in cost (USD)',
-       x='change in DALYs averted',
-       color='intervention')
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = 'All strategies',
+       y = 'change in cost (USD)',
+       x = 'change in DALYs averted',
+       color = 'intervention')
 
 # removing dominated strategies
 B <- output %>%
@@ -279,126 +271,131 @@ B <- output %>%
   group_by(ID) %>% arrange(ID, deltacost) %>%
   filter(!(deltadaly < 0 & deltacost > 0)) %>%
   # filter out dominated strategies
-  mutate(dominate = case_when(deltadaly < lag(deltadaly,n=12L) ~ 1,
-                              deltadaly < lag(deltadaly,n=11L) ~ 1,
-                              deltadaly < lag(deltadaly,n=10L) ~ 1,
-                              deltadaly < lag(deltadaly,n=9L) ~ 1,
-                              deltadaly < lag(deltadaly,n=8L) ~ 1,
-                              deltadaly < lag(deltadaly,n=7L) ~ 1,
-                              deltadaly < lag(deltadaly,n=6L) ~ 1,
-                              deltadaly < lag(deltadaly,n=5L) ~ 1,
-                              deltadaly < lag(deltadaly,n=4L) ~ 1,
-                              deltadaly < lag(deltadaly,n=3L) ~ 1,
-                              deltadaly < lag(deltadaly,n=2L) ~ 1,
-                              deltadaly < lag(deltadaly,n=1L) ~ 1,
+  mutate(dominate = case_when(deltadaly < lag(deltadaly, n=12L) ~ 1,
+                              deltadaly < lag(deltadaly, n=11L) ~ 1,
+                              deltadaly < lag(deltadaly, n=10L) ~ 1,
+                              deltadaly < lag(deltadaly, n=9L) ~ 1,
+                              deltadaly < lag(deltadaly, n=8L) ~ 1,
+                              deltadaly < lag(deltadaly, n=7L) ~ 1,
+                              deltadaly < lag(deltadaly, n=6L) ~ 1,
+                              deltadaly < lag(deltadaly, n=5L) ~ 1,
+                              deltadaly < lag(deltadaly, n=4L) ~ 1,
+                              deltadaly < lag(deltadaly, n=3L) ~ 1,
+                              deltadaly < lag(deltadaly, n=2L) ~ 1,
+                              deltadaly < lag(deltadaly, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
+  filter(dominate == 0) %>%
   # marking extended dominated strategies
-  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
-         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
-                              ICER > lead(ICER,n=11L) ~ 1,
-                              ICER > lead(ICER,n=10L) ~ 1,
-                              ICER > lead(ICER,n=9L) ~ 1,
-                              ICER > lead(ICER,n=8L) ~ 1,
-                              ICER > lead(ICER,n=7L) ~ 1,
-                              ICER > lead(ICER,n=6L) ~ 1,
-                              ICER > lead(ICER,n=5L) ~ 1,
-                              ICER > lead(ICER,n=4L) ~ 1,
-                              ICER > lead(ICER,n=3L) ~ 1,
-                              ICER > lead(ICER,n=2L) ~ 1,
-                              ICER > lead(ICER,n=1L) ~ 1,
+  mutate(ICER = (deltacost - lag(deltacost)) / (deltadaly - lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER, n=12L) ~ 1,
+                              ICER > lead(ICER, n=11L) ~ 1,
+                              ICER > lead(ICER, n=10L) ~ 1,
+                              ICER > lead(ICER, n=9L) ~ 1,
+                              ICER > lead(ICER, n=8L) ~ 1,
+                              ICER > lead(ICER, n=7L) ~ 1,
+                              ICER > lead(ICER, n=6L) ~ 1,
+                              ICER > lead(ICER, n=5L) ~ 1,
+                              ICER > lead(ICER, n=4L) ~ 1,
+                              ICER > lead(ICER, n=3L) ~ 1,
+                              ICER > lead(ICER, n=2L) ~ 1,
+                              ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
+  filter(dominate == 0) %>%
   # loop through extendedly dominated strategies again
-  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
-         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
-                              ICER > lead(ICER,n=11L) ~ 1,
-                              ICER > lead(ICER,n=10L) ~ 1,
-                              ICER > lead(ICER,n=9L) ~ 1,
-                              ICER > lead(ICER,n=8L) ~ 1,
-                              ICER > lead(ICER,n=7L) ~ 1,
-                              ICER > lead(ICER,n=6L) ~ 1,
-                              ICER > lead(ICER,n=5L) ~ 1,
-                              ICER > lead(ICER,n=4L) ~ 1,
-                              ICER > lead(ICER,n=3L) ~ 1,
-                              ICER > lead(ICER,n=2L) ~ 1,
-                              ICER > lead(ICER,n=1L) ~ 1,
+  mutate(ICER = (deltacost - lag(deltacost)) / (deltadaly - lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER, n=12L) ~ 1,
+                              ICER > lead(ICER, n=11L) ~ 1,
+                              ICER > lead(ICER, n=10L) ~ 1,
+                              ICER > lead(ICER, n=9L) ~ 1,
+                              ICER > lead(ICER, n=8L) ~ 1,
+                              ICER > lead(ICER, n=7L) ~ 1,
+                              ICER > lead(ICER, n=6L) ~ 1,
+                              ICER > lead(ICER, n=5L) ~ 1,
+                              ICER > lead(ICER, n=4L) ~ 1,
+                              ICER > lead(ICER, n=3L) ~ 1,
+                              ICER > lead(ICER, n=2L) ~ 1,
+                              ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
-  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
-         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
-                              ICER > lead(ICER,n=11L) ~ 1,
-                              ICER > lead(ICER,n=10L) ~ 1,
-                              ICER > lead(ICER,n=9L) ~ 1,
-                              ICER > lead(ICER,n=8L) ~ 1,
-                              ICER > lead(ICER,n=7L) ~ 1,
-                              ICER > lead(ICER,n=6L) ~ 1,
-                              ICER > lead(ICER,n=5L) ~ 1,
-                              ICER > lead(ICER,n=4L) ~ 1,
-                              ICER > lead(ICER,n=3L) ~ 1,
-                              ICER > lead(ICER,n=2L) ~ 1,
-                              ICER > lead(ICER,n=1L) ~ 1,
+  filter(dominate == 0) %>%
+  mutate(ICER = (deltacost - lag(deltacost)) / (deltadaly - lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER, n=12L) ~ 1,
+                              ICER > lead(ICER, n=11L) ~ 1,
+                              ICER > lead(ICER, n=10L) ~ 1,
+                              ICER > lead(ICER, n=9L) ~ 1,
+                              ICER > lead(ICER, n=8L) ~ 1,
+                              ICER > lead(ICER, n=7L) ~ 1,
+                              ICER > lead(ICER, n=6L) ~ 1,
+                              ICER > lead(ICER, n=5L) ~ 1,
+                              ICER > lead(ICER, n=4L) ~ 1,
+                              ICER > lead(ICER, n=3L) ~ 1,
+                              ICER > lead(ICER, n=2L) ~ 1,
+                              ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
-  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
-         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
-                              ICER > lead(ICER,n=11L) ~ 1,
-                              ICER > lead(ICER,n=10L) ~ 1,
-                              ICER > lead(ICER,n=9L) ~ 1,
-                              ICER > lead(ICER,n=8L) ~ 1,
-                              ICER > lead(ICER,n=7L) ~ 1,
-                              ICER > lead(ICER,n=6L) ~ 1,
-                              ICER > lead(ICER,n=5L) ~ 1,
-                              ICER > lead(ICER,n=4L) ~ 1,
-                              ICER > lead(ICER,n=3L) ~ 1,
-                              ICER > lead(ICER,n=2L) ~ 1,
-                              ICER > lead(ICER,n=1L) ~ 1,
+  filter(dominate == 0) %>%
+  mutate(ICER = (deltacost - lag(deltacost)) / (deltadaly - lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER, n=12L) ~ 1,
+                              ICER > lead(ICER, n=11L) ~ 1,
+                              ICER > lead(ICER, n=10L) ~ 1,
+                              ICER > lead(ICER, n=9L) ~ 1,
+                              ICER > lead(ICER, n=8L) ~ 1,
+                              ICER > lead(ICER, n=7L) ~ 1,
+                              ICER > lead(ICER, n=6L) ~ 1,
+                              ICER > lead(ICER, n=5L) ~ 1,
+                              ICER > lead(ICER, n=4L) ~ 1,
+                              ICER > lead(ICER, n=3L) ~ 1,
+                              ICER > lead(ICER, n=2L) ~ 1,
+                              ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
-  mutate(ICER = (deltacost-lag(deltacost)) / (deltadaly-lag(deltadaly)),
-         dominate = case_when(ICER > lead(ICER,n=12L) ~ 1,
-                              ICER > lead(ICER,n=11L) ~ 1,
-                              ICER > lead(ICER,n=10L) ~ 1,
-                              ICER > lead(ICER,n=9L) ~ 1,
-                              ICER > lead(ICER,n=8L) ~ 1,
-                              ICER > lead(ICER,n=7L) ~ 1,
-                              ICER > lead(ICER,n=6L) ~ 1,
-                              ICER > lead(ICER,n=5L) ~ 1,
-                              ICER > lead(ICER,n=4L) ~ 1,
-                              ICER > lead(ICER,n=3L) ~ 1,
-                              ICER > lead(ICER,n=2L) ~ 1,
-                              ICER > lead(ICER,n=1L) ~ 1,
+  filter(dominate == 0) %>%
+  mutate(ICER = (deltacost - lag(deltacost)) / (deltadaly - lag(deltadaly)),
+         dominate = case_when(ICER > lead(ICER, n=12L) ~ 1,
+                              ICER > lead(ICER, n=11L) ~ 1,
+                              ICER > lead(ICER, n=10L) ~ 1,
+                              ICER > lead(ICER, n=9L) ~ 1,
+                              ICER > lead(ICER, n=8L) ~ 1,
+                              ICER > lead(ICER, n=7L) ~ 1,
+                              ICER > lead(ICER, n=6L) ~ 1,
+                              ICER > lead(ICER, n=5L) ~ 1,
+                              ICER > lead(ICER, n=4L) ~ 1,
+                              ICER > lead(ICER, n=3L) ~ 1,
+                              ICER > lead(ICER, n=2L) ~ 1,
+                              ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) %>%
-  filter(dominate==0) %>%
-  ggplot(mapping=aes(x=deltadaly, y=deltacost)) +
-  geom_line(aes(group=as.factor(ID)), color='lightgrey', size=.5, alpha=0.2) +
-  geom_point(aes(color=intervention_f), size=2, alpha=0.6, show.legend = F) +
-  geom_hline(yintercept = 0, lty=2, color="black") +
-  geom_vline(xintercept = 0, lty=2, color="black") +
-  facet_grid(~seasonality, scales = "free") +
+  filter(dominate == 0) %>%
+
+  ggplot(mapping = aes(x = deltadaly, y = deltacost)) +
+  geom_line(aes(group = as.factor(ID)), color = 'lightgrey',
+            size = .5, alpha = 0.2) +
+  geom_point(aes(color = intervention_f), size = 2, alpha = 0.6, show.legend = F) +
+  geom_hline(yintercept = 0, lty = 2, color = "black") +
+  geom_vline(xintercept = 0, lty = 2, color = "black") +
+  facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
   theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  labs(title='Dominated strategies removed',
-       y='change in cost (USD)',
-       x='change in DALYs averted',
-       color='intervention',
-       caption='Assuming resistance == 0') +
+  labs(title = 'Dominated strategies removed',
+       y = 'change in cost (USD)',
+       x = 'change in DALYs averted',
+       color = 'intervention',
+       caption = 'Assuming resistance == 0') +
   theme(plot.caption.position = "plot")
 
 A + B + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
 
-ggsave(paste0('./03_output/plots_draws/impact_cloud_all.pdf'), width=12, height=7)
+ggsave(paste0('./03_output/plots_draws/impact_cloud_all.pdf'), width = 12, height = 7)
+
 
 
 # box and whisker delta cost / delta daly --------------------------------------
+# < DALYS ----
+# print stats
 tabledat <- scenarios %>%
   filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   group_by(intervention_f) %>%
-  summarize(n=n(),
+  summarize(n = n(),
             median = round(median(CE)),
-            q25 = round(quantile(CE, p=0.25)),
-            q75 = round(quantile(CE, p=0.75)),
+            q25 = round(quantile(CE, p = 0.25)),
+            q75 = round(quantile(CE, p = 0.75)),
             min = round(min(CE)),
             max = round(max(CE))) %>%
   arrange(median)
@@ -411,31 +408,37 @@ levels <- scenarios %>%
   mutate(group = case_when(intervention_f %in% c('ITN 10% increase', 'ITN PBO', 'SMC', 'RTS,S seasonal', 'RTS,S age-based') ~ 'uni',
                            TRUE ~ 'multi')) %>%
   group_by(intervention_f, group) %>%
-  summarize(med = median(CE, na.rm=T) )%>% ungroup() %>%
+  summarize(med = median(CE, na.rm = T) )%>% ungroup() %>%
   arrange(desc(group), med)
+
+# list color order for plots
+colors <- c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)
 
 # plot of cost per DALY averted
 box_plot <- function(cost_dose){
+
   scenarios %>%
     filter(cost_per_dose == cost_dose & delivery_cost == 1.62) %>%
-    mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
-    mutate(rank=as.numeric(intervention_f)) %>%
+    mutate(intervention_f = factor(intervention, levels = levels$intervention_f)) %>%
+    mutate(rank = as.numeric(intervention_f)) %>%
 
-    ggplot(aes(x=rank, y=CE, fill=intervention_f, color=intervention_f, group=intervention)) +
-    geom_hline(yintercept = 0, lty=2, color='grey') +
-    geom_vline(xintercept = 5.5, lty=2, color='grey') +
-    geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
-    coord_cartesian(ylim=c(-100, 500), clip="off") +
-    labs(x='',
-         y=expression(paste(Delta," cost / ", Delta, " DALYs")),
+    ggplot(aes(x = rank, y = CE, fill = intervention_f,
+               color = intervention_f, group = intervention)) +
+    geom_hline(yintercept = 0, lty = 2, color = 'grey') +
+    geom_vline(xintercept = 5.5, lty = 2, color = 'grey') +
+    geom_boxplot(alpha = 0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
+    coord_cartesian(ylim = c(-100, 500), clip = "off") +
+    labs(x = '',
+         y = expression(paste(Delta," cost / ", Delta, " DALYs")),
          fill = 'intervention',
-         # caption=paste0('range in cost / DALYs: ', round(min(scenarios$CE, na.rm = T)), ' to ', round(max(scenarios$CE, na.rm=T))),
          color = 'intervention') +
-    annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-150,ymax=-150) +
-    annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-150,ymax=-150) +
-    scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
-    scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
-    scale_x_continuous(breaks=c(0)) +
+    annotation_custom(textGrob("Univariate strategies"),
+                      xmin = 1, xmax = 5,ymin = -150, ymax = -150) +
+    annotation_custom(textGrob("Mixed strategies"),
+                      xmin = 6, xmax = 12, ymin = -150, ymax = -150) +
+    scale_fill_manual(values = colors) +
+    scale_color_manual(values = colors) +
+    scale_x_continuous(breaks = c(0)) +
     theme_classic() +
     theme(plot.caption.position = "plot")
 
@@ -451,10 +454,15 @@ box_plot(12.91)
 box_plot(17.36)
 
 
-# plotting with cost per cases averted
+# < cases ----
+# print stats
 tabledat <- scenarios %>%
+  # remove scenarios with a negative impact on DALYs
+  mutate(casediff = cases_baseline - cases) %>%
+  filter(casediff >= 0) %>%
+  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   group_by(intervention_f) %>%
-  summarize(n=n(),
+  summarize(n = n(),
             median = round(median(CE_case)),
             q25 = round(quantile(CE_case, p=0.25)),
             q75 = round(quantile(CE_case, p=0.75)),
@@ -465,6 +473,9 @@ tabledat <- scenarios %>%
 tabledat; sum(tabledat$n)
 
 scenarios %>% filter(intervention != 'none') %>%
+  # remove scenarios with a negative impact on DALYs
+  mutate(casediff = cases_baseline - cases) %>%
+  filter(casediff >= 0) %>%
   filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
   mutate(rank=as.numeric(intervention_f)) %>%
@@ -485,15 +496,17 @@ scenarios %>% filter(intervention != 'none') %>%
   scale_x_continuous(breaks=c(0)) +
   theme_classic()
 
-ggsave('./03_output/plots_draws/box_whisker_CE_cases.pdf', width=10, height=5)
+ggsave('./03_output/plots_draws/box_whisker_CE_cases.pdf', width = 10, height = 5)
 
 
 
 # per dose RTS,S cost ----------------------------------------------------------
 # function to find the most common character value in a group
 calculate_mode <- function(x) {
+
   uniqx <- unique(na.omit(x))
   uniqx[which.max(tabulate(match(x, uniqx)))]
+
 }
 
 output <- scenarios %>%
@@ -501,14 +514,14 @@ output <- scenarios %>%
   # choose univariate scenarios
   filter(intervention %in% c('RTS,S seasonal', 'RTS,S age-based', 'SMC', 'none', 'ITN 10% increase', 'ITN PBO')) %>%
   # combine RTS,S strategies
-  mutate(intervention = ifelse(intervention=='RTS,S age-based' | intervention=='RTS,S seasonal', 'RTS,S', intervention)) %>%
+  mutate(intervention = ifelse(intervention == 'RTS,S age-based' | intervention == 'RTS,S seasonal', 'RTS,S', intervention)) %>%
   arrange(ID, drawID) %>%
   group_by(ID, drawID) %>%
   # find minimum CE in each group. If intervention == RTS,S find the second or third lowest CE and move RTS,S to the top
   mutate(CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
          CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
-         CEmin = min(CE, na.rm=T),
-         interventionmin = ifelse(CE==CEmin, intervention, NA),
+         CEmin = min(CE, na.rm = T),
+         interventionmin = ifelse(CE == CEmin, intervention, NA),
          interventionmin = calculate_mode(interventionmin)) %>%
   filter(intervention %in% c('RTS,S')) %>%
   rowwise() %>%
@@ -519,8 +532,8 @@ output <- scenarios %>%
          cost_vax = cost_total - (cost_ITN + cost_clinical + cost_severe + cost_SMC),
          per_dose = cost_vax / (dose1 + dose2 + dose3 + dose4),
          costRTSScon = per_dose - 1.62,   # subtracting delivery cost
-  # cost = dosecost + 0.11*(dosecost) + 0.163*(dosecost + 0.11*dosecost) + 0.14
-  # (cost - 0.14) / 1.29093 = dose
+         # cost = dosecost + 0.11*(dosecost) + 0.163*(dosecost + 0.11*dosecost) + 0.14
+         # (cost - 0.14) / 1.29093 = dose
          costRTSS = (costRTSScon - 0.14)  / 1.29093  # subtracting consumables cost
   ) %>%
   select(ID, seasonality, pfpr, ITNuse, ITN, RTSS, RTSScov, resistance, SMC, treatment, intervention, interventionmin, CE, CEmin, costRTSS) %>%
@@ -528,7 +541,7 @@ output <- scenarios %>%
   arrange(ID, costRTSS)
 
 
-# < all seasons box and whisker ####
+# < all seasons box and whisker ----
 seasoncosts <- output %>% group_by(seasonality) %>%
   summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm = T), 2),
             med = round(median(costRTSS, na.rm = T),2),
@@ -538,49 +551,49 @@ seasoncosts <- output %>% group_by(seasonality) %>%
 
 A <- ggplot(output) +
   geom_hline(yintercept = 0, color = 'light grey') +
-  geom_boxplot(aes(x = factor(seasonality, levels=c('perennial','seasonal','highly seasonal')), y = costRTSS),
+  geom_boxplot(aes(x = factor(seasonality, levels = c('perennial','seasonal','highly seasonal')), y = costRTSS),
                fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=q25, label=q25), size = 3, nudge_y = .55, nudge_x = -.223) +
-  geom_text(data = seasoncosts, aes(x=seasonality, y=med, label=med), size = 3, nudge_y = .55, nudge_x = -.2) +
-  geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal'), aes(x=seasonality, y=q75, label=q75), size = 3, nudge_y = .55, nudge_x = -.2) +
-  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal'), aes(x=seasonality, y=q75, label=format(round(q75,2), nsmall = 2)), size = 3, nudge_y = 1.2, nudge_x = -.2) +
+  geom_text(data = seasoncosts, aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = -.223) +
+  geom_text(data = seasoncosts, aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = -.2) +
+  geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal'),
+            aes(x = seasonality, y = q75, label = q75), size = 3, nudge_y = .55, nudge_x = -.2) +
+  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal'),
+            aes(x= seasonality, y = q75, label = format(round(q75, 2), nsmall = 2)), size = 3, nudge_y = 1.2, nudge_x = -.2) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   theme_classic() +
-  labs(y='RTS,S cost (USD) per dose',
-       #caption=paste0('range = ', round(min(output$costRTSS)), ' to ', round(max(output$costRTSS)))
-       x=''
-  ) +
+  labs(y='RTS,S cost (USD) per dose', x='') +
   coord_cartesian(ylim = c(-15,20)) +
   theme(plot.caption.position = "plot")
 
 ggsave('./03_output/plots_draws/RTSS_price_dist_all.pdf', A, width=6, height=4)
 
 
-# table
+# print stats
 seasoncosts
 
 output %>% ungroup() %>%
   group_by(interventionmin) %>%
-  summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm=T),2),
-            med = round(median(costRTSS, na.rm=T),2),
-            q75 = round(quantile(costRTSS, probs = 0.75, na.rm=T),2))
+  summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm = T),2),
+            med = round(median(costRTSS, na.rm = T),2),
+            q75 = round(quantile(costRTSS, probs = 0.75, na.rm = T),2))
 
-# how many are above $5 - SMC / ITNuse
+# how many are above $5 - stratified by SMC / ITNuse
 output %>% filter(costRTSS >= 5) %>% group_by(SMC, ITNuse) %>%
   summarize(n = n()) %>%
   ungroup() %>%
   mutate(t = sum(n), p = n/t * 100)
 
 
-# how many are above $5 - pfpr
+# how many are above $5 - stratified by PfPR
 output %>% filter(costRTSS >= 5) %>% group_by(pfpr) %>%
   summarize(n = n()) %>%
   ungroup() %>%
   mutate(t = sum(n), p = n/t * 100)
 
 
-# < line plot ####
 
+# < line plot ----
+# calculate proportion of scenarios at each cost-per-dose value
 output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
   mutate(p = (nrow(output) - row_number() + 1) / nrow(output) * 100) %>%
   ungroup()
@@ -590,12 +603,13 @@ dose5 <- output2 %>% filter(costRTSS <= 5) %>% top_n(-1) %>% select(p) %>% as.nu
 dose10 <- output2 %>% filter(costRTSS <= 10) %>% top_n(-1) %>% select(p) %>% as.numeric()
 dose135 <-  output2 %>% filter(costRTSS <= 13.5) %>% top_n(-1) %>% select(p) %>% as.numeric()
 
-table(output$drawID) # 450
+table(output$drawID) # 450 total
 
 output3 <- output %>% ungroup() %>% group_by(drawID) %>% arrange(costRTSS) %>%
-  mutate(p = (450 - row_number() + 1) / 450 * 100) %>%
+  mutate(p = (n() - row_number() + 1) / n() * 100) %>%
   ungroup()
 
+# create median lines and points for plot
 segments <- data.frame(
   x = c(2, -20, 5, -20, 10, -20, 13.5, -20),
   xend = c(2, 2, 5, 5, 10, 10, 13.5, 13.5),
@@ -630,6 +644,8 @@ A + B + plot_annotation(tag_levels = 'A')
 ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width=10, height=4)
 
 
+
+
 # univariate stacked histogram patterns ----------------------------------------
 # look at color choices
 
@@ -637,55 +653,55 @@ ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width=10, height=4)
 univariateseason <- function(season) {
 
   # assign colors
-  if(season=='perennial'){
+  if(season == 'perennial'){
     colors <- c(itn, pbo, rtss_age)
   }
 
-  if(season=='highly seasonal'){
+  if(season == 'highly seasonal'){
     colors <- c(itn, pbo, rtss_age, rtss_sv)
   }
 
-  if(season=='seasonal'){
+  if(season == 'seasonal'){
     colors <- c(itn, pbo, smc)
   }
 
   # by pfpr
   output <- scenarios %>%
-    filter(seasonality==season) %>%
-    filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+    filter(seasonality == season) %>%
+    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
     filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
     group_by(ID, drawID) %>% arrange(ID, CE) %>%
     slice(1L)
 
   A <- ggplot(output) +
-    geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
-    labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = as.factor(pfpr), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'PfPR', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values =colors) +
     theme_classic()
 
   # by current ITN usage
   B <- ggplot(output) +
-    geom_bar(aes(x=factor(ITNuse), fill=intervention_f), position="fill", show.legend=F) +
-    labs(x='ITN use', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(ITNuse), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'ITN use', y = 'Proportion most \ncost-effective choice', fill='intervention') +
+    scale_fill_manual(values = colors) +
     theme_classic()
 
   # by insecticide resistance
   C <- ggplot(output) +
-    geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill", show.legend=F) +
-    labs(x='Resistance', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(resistance), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'Resistance', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
     theme_classic()
 
   # by ITN distribution efficiency
   ITNefficient <- function(var, label) {
     scenarios %>%
-      filter(seasonality==season) %>%
-      filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+      filter(seasonality == season) %>%
+      filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
       filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
       group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
       slice(1L) %>% select(intervention_f, seasonality, pfpr, {{var}}) %>%
-      mutate(model=label) %>%
+      mutate(model = label) %>%
       rename(CE = {{var}})
   }
 
@@ -694,32 +710,32 @@ univariateseason <- function(season) {
     full_join(ITNefficient(CE_ITNmax, 'more efficient'))
 
 
-  if(season=='seasonal'){
+  if(season == 'seasonal'){
     colors <- c(itn, pbo, rtss_age, rtss_sv, smc)
   }
 
   D <- ggplot(output2) +
-    geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient')), fill=intervention_f), position="fill") +
-    labs(x='ITN efficiency', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(model, levels = c('less efficient', 'standard', 'more efficient')), fill = intervention_f), position = "fill") +
+    labs(x = 'ITN efficiency', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     theme_classic()
 
 
-  if(season=='seasonal'){
+  if(season == 'seasonal'){
     colors <- c(itn, pbo, smc)
   }
 
   E <- ggplot(output) +
-    geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend = F) +
-    labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(treatment, labels = c('low', 'medium', 'high')), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'Treatment coverage', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     theme_classic()
 
-  (A + B + C + D + E) + plot_layout(guides = "collect", nrow=3, ncol=2) + plot_annotation(tag_levels = 'A')
+  (A + B + C + D + E) + plot_layout(guides = "collect", nrow = 3, ncol = 2) + plot_annotation(tag_levels = 'A')
 
-  ggsave(paste0('./03_output/plots_draws/univariate_quad_', season, '.pdf'), width=9, height=7)
+  ggsave(paste0('./03_output/plots_draws/univariate_quad_', season, '.pdf'), width = 9, height = 7)
 
 }
 
@@ -744,37 +760,37 @@ stacked_plot <- function(cost_dose){
 
   # by pfpr
   A <- ggplot(output) +
-    geom_bar(aes(x=as.factor(pfpr), fill=intervention_f), position="fill", show.legend = F) +
-    labs(x='PfPR', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
-    facet_grid(~seasonality) +
+    geom_bar(aes(x = as.factor(pfpr), fill=intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'PfPR', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
+    facet_grid(~ seasonality) +
     theme_classic()
 
   # by current ITN usage
   B <- ggplot(output) +
-    geom_bar(aes(x=factor(ITNuse), fill=intervention_f), position="fill", show.legend=F) +
-    labs(x='ITN use', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
-    facet_grid(~seasonality) +
+    geom_bar(aes(x = factor(ITNuse), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'ITN use', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
+    facet_grid(~ seasonality) +
     theme_classic()
 
   # by insecticide resistance
   C <- ggplot(output) +
-    geom_bar(aes(x=factor(resistance), fill=intervention_f), position="fill", show.legend=F) +
-    labs(x='Resistance', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
-    facet_grid(~seasonality) +
+    geom_bar(aes(x = factor(resistance), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'Resistance', y='Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
+    facet_grid(~ seasonality) +
     theme_classic()
 
   # by ITN distribution efficiency
   ITNefficient <- function(var, label) {
     scenarios %>%
-      filter(cost_per_dose==cost_dose & delivery_cost==1.62) %>%
+      filter(cost_per_dose == cost_dose & delivery_cost == 1.62) %>%
       filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
       mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
       group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
       slice(1L) %>% select(intervention, intervention_f, seasonality, pfpr, {{var}}) %>%
-      mutate(model=label) %>%
+      mutate(model = label) %>%
       rename(CE = {{var}})
   }
 
@@ -784,19 +800,20 @@ stacked_plot <- function(cost_dose){
 
 
   D <- ggplot(output2) +
-    geom_bar(aes(x=factor(model, levels=c('less efficient', 'standard', 'more efficient'), labels=c('less', 'standard', 'more')), fill=intervention_f), position="fill") +
-    labs(x='ITN efficiency', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(model, levels = c('less efficient', 'standard', 'more efficient'),
+                            labels = c('less', 'standard', 'more')), fill = intervention_f), position = "fill") +
+    labs(x = 'ITN efficiency', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
-    facet_grid(~seasonality) +
+    facet_grid(~ seasonality) +
     theme_classic()
 
   E <- ggplot(output) +
-    geom_bar(aes(x=factor(treatment, labels=c('low', 'medium', 'high')), fill=intervention_f), position="fill", show.legend=F) +
-    labs(x='Treatment coverage', y='Proportion most \ncost-effective choice', fill='intervention') +
-    scale_fill_manual(values=colors) +
+    geom_bar(aes(x = factor(treatment, labels = c('low', 'medium', 'high')), fill = intervention_f), position = "fill", show.legend = F) +
+    labs(x = 'Treatment coverage', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
+    scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
-    facet_grid(~seasonality) +
+    facet_grid(~ seasonality) +
     theme_classic()
 
   legend <- cowplot::get_legend(D)
@@ -808,7 +825,7 @@ stacked_plot <- function(cost_dose){
     plot_layout(nrow = 3) +
     plot_annotation(tag_levels = list(c('A', 'B', 'C', 'D', 'E', '')))
 
-  ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season_', cost_dose, '.pdf'), width=10, height=8)
+  ggsave(paste0('./03_output/plots_draws/univariate_quad_by_season_', cost_dose, '.pdf'), width = 10, height = 8)
 
 }
 
@@ -819,9 +836,8 @@ stacked_plot(17.36)
 
 
 # print out statistics
-
 output <- scenarios %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
   filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
   group_by(ID, drawID) %>% arrange(ID, drawID, CE) %>%
@@ -830,12 +846,12 @@ output <- scenarios %>%
   # by ITN distribution efficiency
 ITNefficient <- function(var, label) {
   scenarios %>%
-    filter(cost_per_dose==6.52 & delivery_cost==1.62) %>%
+    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
     filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
     mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
     group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
     slice(1L) %>% select(intervention, intervention_f, seasonality, pfpr, {{var}}) %>%
-    mutate(model=label) %>%
+    mutate(model = label) %>%
     rename(CE = {{var}})
 }
 
@@ -868,6 +884,7 @@ output %>%
   ungroup() %>%
   group_by(seasonality) %>%
   mutate(t = sum(n), p = n / t * 100)
+
 
 
 # TABLES -----------------------------------------------------------------------
@@ -1125,9 +1142,8 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
 # CASE STUDY -------------------------------------------------------------------
 
 output <- readRDS('./03_output/dalyoutput_draws_casestudy.rds') %>%
-  filter(cost_per_dose==6.52 & delivery_cost==1.62) %>% ungroup()
-
-test <- output %>% filter(is.na(cost_total))
+  ungroup() %>%
+  filter(cost_per_dose==6.52 & delivery_cost==1.62)
 
 summary(output$cost_total)
 
@@ -1205,17 +1221,19 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
            outcome_diff = outcome_baseline - {{var}},
            disparity_per = (disparity - disparity_baseline) / disparity_baseline * 100,
            CE_outcome = cost_diff / outcome_diff) %>%
+    filter(outcome_diff >= 0) %>% # take out scenarios where DALYs increase
     ungroup() %>%
     # summarize over drawID
     group_by(seasonality, scenario2, scenario2_f, scenario, scenario_f) %>%
+    filter(scenario_f != 'baseline') %>%
     summarize(n = 50,
-              estimate_CE = mean(CE_outcome, na.rm = T),
-              lower_CE = estimate_CE - 1.96 * (sd(CE_outcome, na.rm = T) / sqrt(n)),
-              upper_CE = estimate_CE + 1.96 * (sd(CE_outcome, na.rm = T) / sqrt(n)),
+              estimate_CE = median(CE_outcome, na.rm = T),
+              lower_CE = quantile(CE_outcome, 0.025),
+              upper_CE = quantile(CE_outcome, 0.975),
 
-              estimate_disparity = mean(disparity_per, na.rm = T),
-              lower_dis = estimate_disparity - 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n)),
-              upper_dis = estimate_disparity + 1.96 * (sd(disparity_per, na.rm = T) / sqrt(n))) %>%
+              estimate_disparity = median(disparity_per, na.rm = T),
+              lower_dis = quantile(disparity_per, 0.025),
+              upper_dis = quantile(disparity_per, 0.975)) %>%
     # put negative cost effectiveness values up to 0
     mutate(estimate_CE = case_when(estimate_CE < 0 ~ 0,
                                    TRUE ~ estimate_CE),
@@ -1307,11 +1325,6 @@ B <- plot_equity(daly)
 C <- plot_equity(cases)
 D <- plot_equity(deaths)
 
-plot <- (A + B + C) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
-
-ggsave(paste0('./03_output/plots_draws/case_study_', 'ABC', '.png'), plot = plot, width=10, height=4)
-
-
 
 P1 <- B + geom_hline(yintercept = 0, lty=2, color='grey') +
   labs(y = 'more cost-effective',
@@ -1343,3 +1356,4 @@ P2 <- C + geom_hline(yintercept = 0, lty=2, color='grey') +
 plot <- (P1 + P2) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
 ggsave(paste0('./03_output/plots_draws/case_study_', 'arrows', '.png'), width = 10, height = 4)
+
