@@ -639,9 +639,17 @@ B <- ggplot(output3) +
 ggsave('./03_output/plots_draws/RTSS_price_dist_lineplot.pdf', B, width=6, height=4)
 
 # combined plot
-A + B + plot_annotation(tag_levels = 'A')
+A +
+  (B + coord_cartesian(xlim = c(0, 12), ylim = c(0, 100))) + plot_annotation(tag_levels = 'A')
 
 ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width=10, height=4)
+
+
+# print stats
+100 - dose2
+100 - dose5
+100 - dose10
+100 - dose135
 
 
 
