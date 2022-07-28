@@ -259,7 +259,8 @@ A <- ggplot(data = output, aes(x = deltadaly, y = deltacost)) +
   facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        text = element_text(size = 14)) +
   labs(title = 'All strategies',
        y = 'change in cost (USD)',
        x = 'change in DALYs averted',
@@ -372,12 +373,12 @@ B <- output %>%
   facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        text = element_text(size = 14)) +
   labs(title = 'Dominated strategies removed',
        y = 'change in cost (USD)',
        x = 'change in DALYs averted',
-       color = 'intervention',
-       caption = 'Assuming resistance == 0') +
+       color = 'intervention') +
   theme(plot.caption.position = "plot")
 
 A + B + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = 'A')
@@ -426,23 +427,24 @@ box_plot <- function(cost_dose){
                color = intervention_f, group = intervention)) +
     geom_hline(yintercept = 0, lty = 2, color = 'grey') +
     geom_vline(xintercept = 5.5, lty = 2, color = 'grey') +
-    geom_boxplot(alpha = 0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
+    geom_boxplot(alpha = 0.3, outlier.alpha = 0.05,  outlier.size = 0.05, coef = 500) +
     coord_cartesian(ylim = c(-100, 500), clip = "off") +
     labs(x = '',
          y = expression(paste(Delta," cost / ", Delta, " DALYs")),
          fill = 'intervention',
          color = 'intervention') +
     annotation_custom(textGrob("Univariate strategies"),
-                      xmin = 1, xmax = 5,ymin = -150, ymax = -150) +
+                      xmin = 1, xmax = 5,ymin = -155, ymax = -155) +
     annotation_custom(textGrob("Mixed strategies"),
-                      xmin = 6, xmax = 12, ymin = -150, ymax = -150) +
+                      xmin = 6, xmax = 12, ymin = -155, ymax = -155) +
     scale_fill_manual(values = colors) +
     scale_color_manual(values = colors) +
     scale_x_continuous(breaks = c(0)) +
     theme_classic() +
-    theme(plot.caption.position = "plot")
+    theme(plot.caption.position = "plot",
+          text = element_text(size = 14))
 
-  ggsave(paste0('./03_output/plots_draws/box_whisker_CE_', cost_dose, '.pdf'), width=10, height=5)
+  ggsave(paste0('./03_output/plots_draws/box_whisker_CE_', cost_dose, '.pdf'), width = 9, height = 4)
 
 }
 
@@ -483,20 +485,22 @@ scenarios %>% filter(intervention != 'none') %>%
   ggplot(aes(x=rank, y=CE_case, fill=intervention_f, color=intervention_f, group=intervention)) +
   geom_hline(yintercept = 0, lty=2, color='grey') +
   geom_vline(xintercept = 5.5, lty=2, color='grey') +
-  geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05) +
+  geom_boxplot(alpha=0.3, outlier.alpha = 0.05,  outlier.size = 0.05, coef = 500) +
   coord_cartesian(ylim=c(-1, 80), clip="off") +
   labs(x='',
        y=expression(paste(Delta," cost / ", Delta, " cases")),
        fill = 'intervention',
        color = 'intervention') +
-  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-7,ymax=-7) +
-  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-7,ymax=-7) +
+  annotation_custom(textGrob("Univariate strategies"),xmin=1,xmax=5,ymin=-8,ymax=-8) +
+  annotation_custom(textGrob("Mixed strategies"),xmin=6,xmax=12,ymin=-8,ymax=-8) +
   scale_fill_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
   scale_color_manual(values = c(smc, pbo, itn, rtss_sv, rtss_age, pbo_smc, itn_smc, rtss_smc, pbo_rtss_smc, itn_rtss_smc, pbo_rtss, itn_rtss)) +
   scale_x_continuous(breaks=c(0)) +
-  theme_classic()
+  theme_classic() +
+  theme(plot.caption.position = "plot",
+        text = element_text(size = 14))
 
-ggsave('./03_output/plots_draws/box_whisker_CE_cases.pdf', width = 10, height = 5)
+ggsave('./03_output/plots_draws/box_whisker_CE_cases.pdf', width = 9, height = 4)
 
 
 
@@ -552,7 +556,7 @@ seasoncosts <- output %>% group_by(seasonality) %>%
 A <- ggplot(output) +
   geom_hline(yintercept = 0, color = 'light grey') +
   geom_boxplot(aes(x = factor(seasonality, levels = c('perennial','seasonal','highly seasonal')), y = costRTSS),
-               fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1) +
+               fill = 'cornflower blue', color = 'cornflower blue', alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1, coef = 100) +
   geom_text(data = seasoncosts, aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = -.223) +
   geom_text(data = seasoncosts, aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = -.2) +
   geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal'),
@@ -562,8 +566,9 @@ A <- ggplot(output) +
   geom_vline(xintercept = 0, lty = 2, color = 'grey') +
   theme_classic() +
   labs(y='RTS,S cost (USD) per dose', x='') +
-  coord_cartesian(ylim = c(-15,20)) +
-  theme(plot.caption.position = "plot")
+  coord_cartesian(ylim = c(-5,20)) +
+  theme(plot.caption.position = "plot",
+        text = element_text(size = 14))
 
 ggsave('./03_output/plots_draws/RTSS_price_dist_all.pdf', A, width=6, height=4)
 
@@ -634,7 +639,8 @@ B <- ggplot(output3) +
        x='RTS,S cost per dose (USD)'
   ) +
   scale_x_continuous(breaks = c(-5, 0, 2, 5, 10, 13.5)) +
-  coord_cartesian(xlim = c(0, 15), ylim = c(0, 100))
+  coord_cartesian(xlim = c(0, 15), ylim = c(0, 100)) +
+  theme(text = element_text(size = 14))
 
 ggsave('./03_output/plots_draws/RTSS_price_dist_lineplot.pdf', B, width=6, height=4)
 
@@ -642,7 +648,7 @@ ggsave('./03_output/plots_draws/RTSS_price_dist_lineplot.pdf', B, width=6, heigh
 A +
   (B + coord_cartesian(xlim = c(0, 12), ylim = c(0, 100))) + plot_annotation(tag_levels = 'A')
 
-ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width=10, height=4)
+ggsave('./03_output/plots_draws/RTSS_price_dist_AB.pdf', width = 10, height = 4)
 
 
 # print stats
@@ -772,7 +778,8 @@ stacked_plot <- function(cost_dose){
     labs(x = 'PfPR', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
     scale_fill_manual(values = colors) +
     facet_grid(~ seasonality) +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14))
 
   # by current ITN usage
   B <- ggplot(output) +
@@ -780,7 +787,8 @@ stacked_plot <- function(cost_dose){
     labs(x = 'ITN use', y = 'Proportion most \ncost-effective choice', fill = 'intervention') +
     scale_fill_manual(values = colors) +
     facet_grid(~ seasonality) +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14))
 
   # by insecticide resistance
   C <- ggplot(output) +
@@ -788,7 +796,8 @@ stacked_plot <- function(cost_dose){
     labs(x = 'Resistance', y='Proportion most \ncost-effective choice', fill = 'intervention') +
     scale_fill_manual(values = colors) +
     facet_grid(~ seasonality) +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14))
 
   # by ITN distribution efficiency
   ITNefficient <- function(var, label) {
@@ -814,7 +823,9 @@ stacked_plot <- function(cost_dose){
     scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     facet_grid(~ seasonality) +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14),
+          axis.text.x = element_text(size = 8))
 
   E <- ggplot(output) +
     geom_bar(aes(x = factor(treatment, labels = c('low', 'medium', 'high')), fill = intervention_f), position = "fill", show.legend = F) +
@@ -822,7 +833,9 @@ stacked_plot <- function(cost_dose){
     scale_fill_manual(values = colors) +
     scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
     facet_grid(~ seasonality) +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14),
+          axis.text.x = element_text(size = 9))
 
   legend <- cowplot::get_legend(D)
 
@@ -952,7 +965,7 @@ output2 <- output %>% filter(!(file %in% base_IDs)) %>%
                          seasonality=='seasonal' & intervention %in%
                            c('ITN 10% increase + RTS,S + SMC','ITN PBO + RTS,S + SMC') ~ 1)) %>%
   filter(set == 1) %>%
-  dplyr::select(file, ID, drawID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys) %>%
+  dplyr::select(file, ID, drawID, pfpr, seasonality, intervention, daly, cases, cost_total, u5_dalys, dose3) %>%
   left_join(none %>% dplyr::select(-file), by=c('ID', 'drawID')) %>%
   mutate(CE = (cost_total - cost_total_baseline) / (daly_baseline - daly),
          deltadaly = daly_baseline - daly,
@@ -963,6 +976,7 @@ output2 <- output %>% filter(!(file %in% base_IDs)) %>%
 # adjusting for 15 year simulation period and 200,000 population arguments
 summary(output2$deltadaly / (2*15)) # additional dalys averted per year in a population of 100,000 people
 summary(output2$deltacases / (2*15)) # additional cases averted per year in a population of 100,000 people
+summary(output2$deltacases / output2$dose3 * 100000) # additional cases averted per year per fully vaccinated child (dose3)
 summary(output2$CE_u5) # additional cases averted per year in a population of 100,000 people
 
 ggplot(data = output2) +
@@ -1147,7 +1161,7 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
 
 
 
-# CASE STUDY -------------------------------------------------------------------
+# EQUITY STUDY -------------------------------------------------------------------
 
 output <- readRDS('./03_output/dalyoutput_draws_casestudy.rds') %>%
   ungroup() %>%
@@ -1283,7 +1297,8 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
     scale_color_manual(values = c("#C70E7B","#007BC3", "#FC6882","#54BCD1")) +
     scale_x_continuous(labels = scales::percent_format(scale = 1)) +
     coord_cartesian(xlim = xlim, ylim = ylim, clip = 'off') +
-    theme_classic()
+    theme_classic() +
+    theme(text = element_text(size = 14))
 
    return(plot)
 
@@ -1340,7 +1355,7 @@ P1 <- B + geom_hline(yintercept = 0, lty=2, color='grey') +
        title = 'DALYs',
        shape = 'baseline scenario',
        color = 'intervention') +
-  geom_segment(aes(x = 40, xend = -40, y = -25, yend = -25),
+  geom_segment(aes(x = 40, xend = -40, y = -27, yend = -27),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
   geom_segment(aes(x = -47, xend = -47, y = 200, yend = 18),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
@@ -1353,7 +1368,7 @@ P2 <- C + geom_hline(yintercept = 0, lty=2, color='grey') +
        title = 'cases',
        shape = 'baseline scenario',
        color = 'intervention') +
-  geom_segment(aes(x = 10, xend = -25, y = -7.1, yend = -7.1),
+  geom_segment(aes(x = 10, xend = -25, y = -7.9, yend = -7.9),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
   geom_segment(aes(x = -28, xend = -28, y = 60, yend = 5),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
@@ -1361,7 +1376,7 @@ P2 <- C + geom_hline(yintercept = 0, lty=2, color='grey') +
   scale_y_continuous(breaks = c(0))
 
 
-plot <- (P1 + P2) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
+(P1 + P2) + plot_layout(guides = "collect", nrow=1) + plot_annotation(tag_levels = 'A')
 
 ggsave(paste0('./03_output/plots_draws/case_study_', 'arrows', '.png'), width = 10, height = 4)
 

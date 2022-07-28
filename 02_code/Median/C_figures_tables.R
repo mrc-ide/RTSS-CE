@@ -1246,6 +1246,7 @@ ggsave('./03_output/SMC_price_dist.pdf', width=12, height=4)
 # ITN dist vs ITN use ----------------------------------------------------------
 # relationship between cost_ITN_linear and cost_ITN:
 # read in netz package data to find the annual nets to distribute to give the simulated usage
+devtools::install_github('https://github.com/mrc-ide/netz/tree/f65bc686243dc0f6f210e8d459de8e11358f246f', force = T)
 nets_data <- netz::prepare_data()
 
 # get nets to be distributed for each ITN usage
@@ -1303,7 +1304,8 @@ ggplot(output, aes(x=cost_ITN_linear, y = cost_ITN, color=target_use)) +
   scale_shape_manual(values=c(1), labels=c('value used in simulation')) +
   facet_grid(~net) +
   labs(x='Linear ITN cost', y='Netz ITN cost', color='target ITN use', shape='') +
-  theme_bw()
+  theme_bw() +
+  theme(text = element_text(size = 14))
 
 ggsave('./03_output/ITN_netz.pdf', width=8, height=4)
 
