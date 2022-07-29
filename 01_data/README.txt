@@ -17,6 +17,9 @@ flat demography file from DIDE malaria group
 
 Intervention_ITN.csv: read below for info from MAP
 
+parameter_draws (FOLDER): list of model parameter draws
+
+
 ========================
 
 Title

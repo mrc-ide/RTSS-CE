@@ -1,0 +1,2 @@
+This folder contains code for running malariasimulation with model parameter draws to capture uncertainty. 
+The HPC code will run on the Imperial College high performance computing cluster, but can be adapated for local runs by lowering the population size and shortening the run-time.
