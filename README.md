@@ -63,10 +63,15 @@ Strategic resource allocation to maximize the impact of malaria response.
 ## R package versions
 
 malariasimulation: 1.3.0
+
 malariaequilibrium: 1.0.1
+
 individual: 0.1.9
+
 cali: https://github.com/mrc-ide/cali/tree/adbc370450716a2231347094c68cf7b31419896c
+
 netz: https://github.com/mrc-ide/netz/tree/a820857153c568a4a6257ab762fa1a94152be028
+
 treasure: https://github.com/mrc-ide/treasure/tree/36a5498f4a3bea07e4a6cb4390e955dac359409a
 
 
