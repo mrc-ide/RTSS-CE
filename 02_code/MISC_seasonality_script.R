@@ -31,7 +31,7 @@ ee_check() # may encounter an error but keep going
 # usethis::edit_r_environ() # to check environment
 
 # sign into google earth account
-ee_Initialize(user='htopazian@gmail.com', drive=T) # Users/htopazian_earthengine
+ee_Initialize(user='email', drive=T) # Users/htopazian_earthengine
 
 
 # Start analysis ---------------------------------------------------------------
