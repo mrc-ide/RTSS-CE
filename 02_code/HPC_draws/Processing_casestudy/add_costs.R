@@ -13,7 +13,7 @@ add_costs <- function(x # dataframe to read in and process
 
   SMCcost <- 0.9075                     # SMC $0.9075 per dose
 
-  cost_per_dose <- c(2.69, 6.52, 12.91) # RTS,S per dose $2, $5, $10 + consumables cost
+  cost_per_dose <- c(2.69, 6.52, 12.01, 12.91, 17.36) # RTS,S per dose $2, $5, $9.3, $10, $13.5 + consumables cost
   delivery_cost <- 1.62                 # RTS,S delivery cost range c(0.96, 1.62, 2.67)
 
   # create combinations of dose cost and delivery cost
@@ -58,7 +58,7 @@ add_costs <- function(x # dataframe to read in and process
 
 
   # read in net distribution conversions, calculated through 'netz_dist.R'
-  nets_distributed <- readRDS('./03_output/netz_data')
+  nets_distributed <- readRDS('./03_output/netz_data.rds')
 
   # create cost variables
   # 77% of treatment costs are from the public sector (DHS, SSA)

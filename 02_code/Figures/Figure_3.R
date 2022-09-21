@@ -11,7 +11,7 @@ deltaseason <- function(season){
 
   output <- scenarios %>%
     filter(seasonality == season) %>%
-    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+    filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
     filter(resistance == 0) %>%
     filter(intervention != 'none') %>%
 
@@ -196,7 +196,7 @@ deltaseason('perennial')
 
 # calculate median change in DALYs and median change in cost
 output <- scenarios %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
   filter(resistance == 0) %>%
   filter(intervention != 'none') %>%
 

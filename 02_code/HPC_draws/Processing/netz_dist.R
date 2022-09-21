@@ -2,8 +2,7 @@
 
 # load netz package data
 library(netz)
-nets_data <- netz::prepare_data()
-
+library(tidyverse)
 
 # input: target ITN useage and observed use rate
 # process: loads
@@ -12,13 +11,15 @@ nets_data <- netz::prepare_data()
 netz_dist <- function(x  # observed use rate
                   ) {
 
-  output <- convert_usage_to_annual_nets_distributed(
-    target_usage = c(0, 0.10, 0.25, 0.35, 0.50, 0.60, 0.75, 0.85),
-    distribution_freq = 3 * 365, # every three years
-    use_rate_data = x,
-    half_life_data = median(nets_data$half_life_data$half_life),
-    extrapolate_npc = "loess",
-    net_loss_function = net_loss_map) %>%
+  output <- expand_grid(target_use = c(0, 0.10, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60, 0.70, 0.75, 0.85)) %>%
+    mutate(half_life = median(get_halflife_data()$half_life),
+           usage_rate = x) %>%
+    mutate(distribution_freq = 365 * 3) %>%
+    mutate(access = usage_to_access(target_use, usage_rate),
+           npc = access_to_crop(access, type = "loess"),
+           annual_percapita_nets_distributed = crop_to_distribution(npc, distribution_freq = distribution_freq,
+                                        net_loss_function = net_loss_map,
+                                        half_life = half_life)) %>%
     select(target_use, annual_percapita_nets_distributed)
 
   # Assumptions:
@@ -28,12 +29,12 @@ netz_dist <- function(x  # observed use rate
   # Assuming net loss is like in MAP paper (smooth compact)
 
   # rename var for min SSA use rate
-  if(x == min(nets_data$use_rate_by_country$use_rate)){
+  if(x == min(get_usage_rate_data()$usage_rate)){
     output <- rename(output, annual_percapita_nets_distmin = annual_percapita_nets_distributed)
   }
 
   # rename var for max SSA use rate
-  if(x == max(nets_data$use_rate_by_country$use_rate)){
+  if(x == max(get_usage_rate_data()$usage_rate)){
     output <- rename(output, annual_percapita_nets_distmax = annual_percapita_nets_distributed)
   }
 
@@ -41,10 +42,9 @@ netz_dist <- function(x  # observed use rate
 
 }
 
-# set target_use
-target_use <- c(0.88, # assume maximum observed use rate and median bednet half life (across Africa)
-                min(nets_data$use_rate_by_country$use_rate), # assume observed rate is the min in Africa
-                max(nets_data$use_rate_by_country$use_rate)) # assume observed rate is the max in Africa
+target_use <- c(0.90, # assume maximum observed use rate and median bednet half life (across Africa)
+                min(get_usage_rate_data()$usage_rate), # assume observed rate is the min in Africa
+                max(get_usage_rate_data()$usage_rate)) # assume observed rate is the max in Africa
 
 # run function
 output <- map_dfr(target_use, netz_dist) %>%
@@ -52,8 +52,10 @@ output <- map_dfr(target_use, netz_dist) %>%
   mutate(across(1:3, mean, na.rm = T)) %>%
   distinct()
 
+output[1, 2:4] <- 0 # set NAs in first row with 0 usage to 0 nets distributed
+
 # save
-saveRDS(output, './03_output/netz_data')
+saveRDS(output, './03_output/netz_data.rds')
 
 # NOTE that values are NA for the target rates 0.75, 0.85 with the min SSA rate #
 

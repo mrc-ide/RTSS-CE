@@ -70,9 +70,6 @@ individual: 0.1.9
 
 cali: https://github.com/mrc-ide/cali/tree/adbc370450716a2231347094c68cf7b31419896c
 
-netz: https://github.com/mrc-ide/netz/tree/a820857153c568a4a6257ab762fa1a94152be028
+netz: https://github.com/mrc-ide/netz/tree/0ce236c34f36cb4d533260f88563dc4e09d3ba65
 
 treasure: https://github.com/mrc-ide/treasure/tree/36a5498f4a3bea07e4a6cb4390e955dac359409a
-
-
-

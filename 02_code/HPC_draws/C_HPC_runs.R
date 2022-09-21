@@ -179,13 +179,19 @@ y <- seq(1000, length(index), 1000)
 data <- tibble(x, y)
 data <- rbind(data, c(128001, length(index))) # add final row
 
-t <- obj$enqueue_bulk(data[1,], cost_effectiveness)
+data <- data %>% mutate(f = paste0("./03_output/HPC_processing/run_", x, "_", y, ".rds")) %>%
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
+  filter(exist == 0) %>%
+  select(-f, -exist)
+
+t <- obj$enqueue_bulk(data, cost_effectiveness)
+t$status()
 
 
 # read in all parameter draw runs and process
 files <- list.files(path = "M:/Hillary/GF-RTSS-CE/03_output/HPC_processing/", pattern = "run*", full.names = TRUE)
 dat_list <- lapply(files, function (x) readRDS(x))
-dalyoutput <- rbindlist(dat_list, fill = TRUE, idcol="identifier")
+dalyoutput <- rbindlist(dat_list, fill = TRUE, idcol = "identifier")
 
 # save output
 saveRDS(dalyoutput, 'M:/Hillary/GF-RTSS-CE/03_output/dalyoutput_draws.rds')

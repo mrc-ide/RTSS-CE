@@ -178,24 +178,24 @@ dalyoutput_cost <- dalyoutput %>%
 
 
 # read in netz package data to find the annual nets to distribute to give the simulated usage
-nets_data <- netz::prepare_data()
-summary(nets_data$use_rate_by_country)
+summary(get_usage_rate_data()$usage_rate)
 # min use_rate = .66, so can only go up to 66% usage
 # max use_rate = .96
 
 
 # get nets to be distributed for each ITN usage
 ndist <- function(x) {
-
-  convert_usage_to_annual_nets_distributed(
-    target_usage = unique(dalyoutput_cost$ITNuse2),
-    distribution_freq = unique(dalyoutput_cost$bednet_distribution_frequency)[
-      !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))],
-    use_rate_data = x,
-    half_life_data = median(nets_data$half_life_data$half_life),
-    extrapolate_npc = "loess",
-    net_loss_function = net_loss_map) %>%
-  select(target_use, annual_percapita_nets_distributed)
+  output <- expand_grid(target_use = c(unique(dalyoutput_cost$ITNuse2))) %>%
+    mutate(half_life = median(get_halflife_data()$half_life),
+           usage_rate = x) %>%
+    mutate(distribution_freq = unique(dalyoutput_cost$bednet_distribution_frequency)[
+      !(is.na(unique(dalyoutput_cost$bednet_distribution_frequency)))]) %>%
+    mutate(access = usage_to_access(target_use, usage_rate),
+           npc = access_to_crop(access, type = "loess"),
+           annual_percapita_nets_distributed = crop_to_distribution(npc, distribution_freq = distribution_freq,
+                                                                    net_loss_function = net_loss_map,
+                                                                    half_life = half_life)) %>%
+    select(target_use, annual_percapita_nets_distributed)
 
 }
 
@@ -203,15 +203,16 @@ ndist <- function(x) {
 nets_distributed <- ndist(0.88)
 
 # assume observed rate is the min in Africa
-nets_distributed_min <- ndist(min(nets_data$use_rate_by_country$use_rate))
+nets_distributed_min <- ndist(min(get_usage_rate_data()$usage_rate))
 nets_distributed_min <- rename(nets_distributed_min, annual_percapita_nets_distmin = annual_percapita_nets_distributed)
 
 # assume observed rate is the max in Africa
-nets_distributed_max <- ndist(max(nets_data$use_rate_by_country$use_rate))
+nets_distributed_max <- ndist(max(get_usage_rate_data()$usage_rate))
 nets_distributed_max <- rename(nets_distributed_max, annual_percapita_nets_distmax = annual_percapita_nets_distributed)
 
-nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max)
+nets_distributed <- full_join(nets_distributed, nets_distributed_min) %>% full_join(nets_distributed_max) %>% arrange(target_use)
 
+nets_distributed[1, 2:4] <- 0 # set NAs in first row with 0 usage to 0 nets distributed
 
 # Assumptions:
 # Using median half life

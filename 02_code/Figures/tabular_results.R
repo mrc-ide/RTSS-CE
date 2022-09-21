@@ -6,7 +6,7 @@ source("./02_code/Figures/data_and_libraries.R")
 
 # < the impact of RTSS on top of other interventions --------------
 output <- scenarios %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
   mutate(ID = paste(pfpr, seasonality, ITNuse, resistance, treatment, ITN, sep = "_")) %>%
   filter(ITNuse == 0.75)
 

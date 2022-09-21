@@ -24,7 +24,7 @@ univariateseason <- function(season) {
   # by pfpr
   output <- scenarios %>%
     filter(seasonality == season) %>%
-    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+    filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
     filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
     group_by(ID, drawID) %>% arrange(ID, CE) %>%
     slice(1L)
@@ -53,7 +53,7 @@ univariateseason <- function(season) {
   ITNefficient <- function(var, label) {
     scenarios %>%
       filter(seasonality == season) %>%
-      filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+      filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
       filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
       group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%
       slice(1L) %>% select(intervention_f, seasonality, pfpr, {{var}}) %>%
@@ -194,13 +194,14 @@ stacked_plot <- function(cost_dose){
 
 stacked_plot(2.69)
 stacked_plot(6.52)
+stacked_plot(12.01)
 stacked_plot(12.91)
 stacked_plot(17.36)
 
 
 # print stats
 output <- scenarios %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
   filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
   mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
   group_by(ID, drawID) %>% arrange(ID, drawID, CE) %>%
@@ -209,7 +210,7 @@ output <- scenarios %>%
 # by ITN distribution efficiency
 ITNefficient <- function(var, label) {
   scenarios %>%
-    filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+    filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
     filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
     mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
     group_by(ID, drawID) %>% arrange(ID, drawID, {{var}}) %>%

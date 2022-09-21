@@ -5,11 +5,8 @@
 HPC_processing <- function(x # index of HPC run to read in and process
                            ){
 
-  # list all files run by HPC
-  files <- list.files(path = "M:/Hillary/GF-RTSS-CE/03_output/HPC/", pattern = "general_*", full.names = TRUE)
-
   # read in specified rds file
-  output <- readRDS(files[x])
+  output <- readRDS(paste0("M:/Hillary/GF-RTSS-CE/03_output/HPC/general_", format(x, scientific = FALSE), ".rds"))
 
   # extract type of RTS,S intervention
   RTSS = output$RTSS[1]
@@ -83,7 +80,7 @@ HPC_processing <- function(x # index of HPC run to read in and process
            severe_cases = inc_severe)
 
 
-  output$file <- files[x]
+  output$file <- paste0("M:/Hillary/GF-RTSS-CE/03_output/HPC/general_", x, ".rds")
 
   return(output)
 

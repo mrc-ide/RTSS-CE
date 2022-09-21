@@ -8,7 +8,7 @@ source("./02_code/Figures/data_and_libraries.R")
 # read in equity analysis results
 output <- readRDS('./03_output/dalyoutput_draws_casestudy.rds') %>%
   ungroup() %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62)
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62)
 
 summary(output$cost_total)
 
@@ -113,13 +113,13 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
 
   if(deparse(substitute(var)) == 'daly'){
     name <- 'DALYs'
-    xlim <- c(-40, 40)
-    ylim <- c(0, 200)
+    xlim <- c(-50, 20)
+    ylim <- c(0, 300)
   }
   if(deparse(substitute(var)) == 'cases'){
     name <- 'cases'
     xlim <- c(-25, 10)
-    ylim <- c(0, 59)
+    ylim <- c(0, 110)
   }
   if(deparse(substitute(var)) == 'deaths'){
     name <- 'deaths'
@@ -159,9 +159,9 @@ P1 <- B + geom_hline(yintercept = 0, lty=2, color='grey') +
        title = 'DALYs',
        shape = 'baseline scenario',
        color = 'intervention') +
-  geom_segment(aes(x = 40, xend = -40, y = -27, yend = -27),
+  geom_segment(aes(x = 20, xend = -50, y = -40, yend = -40),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
-  geom_segment(aes(x = -47, xend = -47, y = 200, yend = 18),
+  geom_segment(aes(x = -57, xend = -57, y = 300, yend = 20),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
   scale_x_continuous(breaks = c(0)) +
   scale_y_continuous(breaks = c(0))
@@ -172,9 +172,9 @@ P2 <- C + geom_hline(yintercept = 0, lty=2, color='grey') +
        title = 'cases',
        shape = 'baseline scenario',
        color = 'intervention') +
-  geom_segment(aes(x = 10, xend = -25, y = -7.9, yend = -7.9),
+  geom_segment(aes(x = 10, xend = -25, y = -15, yend = -15),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
-  geom_segment(aes(x = -28, xend = -28, y = 60, yend = 5),
+  geom_segment(aes(x = -28.5, xend = -28.5, y = 110, yend = 5),
                arrow=arrow(length=unit(0.2,"cm")), color = 'cornflowerblue', size = 1) +
   scale_x_continuous(breaks = c(0)) +
   scale_y_continuous(breaks = c(0))
