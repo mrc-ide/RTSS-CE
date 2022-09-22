@@ -181,7 +181,7 @@ merge %>% group_by(seasonality, intervention_f) %>%
             ICER_m = median(ICER, na.rm=T),
             ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
             ICER_75 = quantile(ICER, prob=0.75, na.rm=T)) %>%
-  write.table("clipboard", sep="\t", row.names=FALSE, col.names=FALSE)
+  write.table("clipboard", sep="\t", row.names=FALSE, col.names=TRUE)
 
 
 # ICER just among non-dominated strategies

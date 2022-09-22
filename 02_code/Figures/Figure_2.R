@@ -74,33 +74,3 @@ box_plot(12.01)
 box_plot(12.91)
 box_plot(17.36)
 
-
-scenarios %>%
-  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
-  mutate(intervention_f = factor(intervention, levels = levels$intervention_f)) %>%
-  mutate(rank = as.numeric(intervention_f)) %>%
-
-  ggplot(aes(x = rank, y = CE_case, fill = intervention_f,
-             color = intervention_f, group = intervention)) +
-  geom_hline(yintercept = 0, lty = 2, color = 'grey') +
-  geom_vline(xintercept = 5.5, lty = 2, color = 'grey') +
-  geom_boxplot(alpha = 0.3, outlier.alpha = 0.05,  outlier.size = 0.05, coef = 500) +
-  coord_cartesian(ylim = c(-50, 300), clip = "off") +
-  labs(x = '',
-       y = expression(paste(Delta," cost / ", Delta, " cases")),
-       fill = 'intervention',
-       color = 'intervention') +
-  annotation_custom(textGrob("Univariate strategies"),
-                    xmin = 1, xmax = 5,ymin = -80, ymax = -80) +
-  annotation_custom(textGrob("Mixed strategies"),
-                    xmin = 6, xmax = 12, ymin = -80, ymax = -80) +
-  scale_fill_manual(values = colors) +
-  scale_color_manual(values = colors) +
-  scale_x_continuous(breaks = c(0)) +
-  scale_y_continuous(breaks = seq(0, 300, 50)) +
-  theme_classic() +
-  theme(plot.caption.position = "plot",
-        text = element_text(size = 14))
-
-ggsave(paste0('./03_output/figure2_cases.pdf'), width = 9, height = 4)
-

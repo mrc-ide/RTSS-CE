@@ -80,6 +80,8 @@ output %>% ungroup() %>%
             med = round(median(costRTSS, na.rm = T),2),
             q75 = round(quantile(costRTSS, probs = 0.75, na.rm = T),2))
 
+
+
 # how many are above $9.3 - stratified by SMC / ITNuse
 output %>% filter(costRTSS >= 9.3) %>% group_by(SMC, ITNuse) %>%
   summarize(n = n()) %>%

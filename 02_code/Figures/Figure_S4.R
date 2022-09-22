@@ -10,7 +10,7 @@ tabledat <- scenarios %>%
   # remove scenarios with a negative impact on DALYs
   mutate(casediff = cases_baseline - cases) %>%
   filter(casediff >= 0) %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
   group_by(intervention_f) %>%
   summarize(n = n(),
             median = round(median(CE_case)),
@@ -26,7 +26,7 @@ scenarios %>% filter(intervention != 'none') %>%
   # remove scenarios with a negative impact on DALYs
   mutate(casediff = cases_baseline - cases) %>%
   filter(casediff >= 0) %>%
-  filter(cost_per_dose == 6.52 & delivery_cost == 1.62) %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
   mutate(intervention_f = factor(intervention, levels=levels$intervention_f)) %>%
   mutate(rank=as.numeric(intervention_f)) %>%
 
