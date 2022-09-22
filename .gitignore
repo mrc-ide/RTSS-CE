@@ -41,3 +41,5 @@ vignettes/*.pdf
 # Misc
 old_files
 *.pdf
+*.png
+*.rds
