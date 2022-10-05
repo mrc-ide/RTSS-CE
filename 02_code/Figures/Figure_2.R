@@ -18,6 +18,19 @@ tabledat <- scenarios %>%
 
 tabledat; sum(tabledat$n)
 
+ # < cost per DALY averted in cost-effective settings
+scenarios %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
+  filter(pfpr == 0.40 & ITNuse == 0.75) %>%
+  filter(seasonality == 'highly seasonal' | seasonality == 'perennial' | (seasonality == 'seasonal' & SMC == 0.85)) %>%
+  group_by(intervention_f) %>%
+  summarize(n = n(),
+            median = round(median(CE)),
+            q25 = round(quantile(CE, p = 0.25)),
+            q75 = round(quantile(CE, p = 0.75)),
+            min = round(min(CE)),
+            max = round(max(CE))) %>%
+  arrange(median)
 
 # set up order of interventions by median CE for plot
 levels <- scenarios %>%
