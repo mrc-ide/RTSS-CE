@@ -1,4 +1,4 @@
-# GF-RTSS-CE  :earth_africa: :syringe: :heavy_dollar_sign:
+# RTSS-CE  :earth_africa: :syringe: :heavy_dollar_sign:
 Strategic resource allocation to maximize the impact of malaria response.
 
 ## Objectives
