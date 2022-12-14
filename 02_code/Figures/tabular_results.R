@@ -215,3 +215,46 @@ scenarios %>% ungroup() %>% filter(resistance==0) %>%
             q25 = quantile(CE, prob=0.25, na.rm=T),
             q75 = quantile(CE, prob=0.75, na.rm=T))
 
+
+# < rankings table for guidance note --------------
+output <- scenarios %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
+  filter(intervention %in% c('ITN 10% increase','ITN PBO','SMC','RTS,S age-based','RTS,S seasonal')) %>%
+  mutate(seasonality = factor(seasonality, levels = c('perennial', 'seasonal', 'highly seasonal'))) %>%
+  group_by(ID, drawID) %>% arrange(ID, drawID, CE) %>%
+  slice(1L)
+
+table <- output %>%
+  group_by(seasonality, pfpr, ITNuse, SMC, resistance, intervention) %>%
+  summarize(n = n()) %>%
+  rename(SMCuse = SMC) %>%
+  mutate(SMCuse = ifelse(seasonality == "seasonal", 0, SMCuse)) %>%
+  group_by(seasonality, pfpr, ITNuse, SMCuse, resistance) %>%
+  mutate(rank = rank(desc(n))) %>%
+  select(-n) %>%
+  pivot_wider(names_from = "rank", values_from = "intervention") %>%
+  mutate(across(`1`:`4`, ~replace_na(.x, "-")))
+
+head(table)
+
+table_n <- output %>%
+  group_by(seasonality, pfpr, ITNuse, SMC, resistance, intervention) %>%
+  summarize(n = n()) %>%
+  rename(SMCuse = SMC) %>%
+  mutate(SMCuse = ifelse(seasonality == "seasonal", 0, SMCuse)) %>%
+  group_by(seasonality, pfpr, ITNuse, SMCuse, resistance) %>%
+  mutate(rank = rank(desc(n))) %>%
+  select(-intervention) %>%
+  pivot_wider(names_from = "rank", values_from = "n")
+
+
+head(table_n)
+
+# copy out to clipboard
+table %>% print(noSpaces = T) %>% write.table("clipboard", sep = "\t")
+table_n %>% print(noSpaces = T) %>% write.table("clipboard", sep = "\t")
+
+
+
+
+

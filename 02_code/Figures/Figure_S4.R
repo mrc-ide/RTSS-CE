@@ -22,6 +22,21 @@ tabledat <- scenarios %>%
 
 tabledat; sum(tabledat$n)
 
+# < cost per case averted in cost-effective settings
+scenarios %>%
+  filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
+  filter(pfpr == 0.40 & ITNuse == 0.75) %>%
+  filter(seasonality == 'highly seasonal' | seasonality == 'perennial' | (seasonality == 'seasonal' & SMC == 0.85)) %>%
+  group_by(intervention_f) %>%
+  summarize(n = n(),
+            median = round(median(CE_case)),
+            q25 = round(quantile(CE_case, p = 0.25)),
+            q75 = round(quantile(CE_case, p = 0.75)),
+            min = round(min(CE_case)),
+            max = round(max(CE_case))) %>%
+  arrange(median)
+
+
 scenarios %>% filter(intervention != 'none') %>%
   # remove scenarios with a negative impact on DALYs
   mutate(casediff = cases_baseline - cases) %>%
