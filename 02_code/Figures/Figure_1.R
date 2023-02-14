@@ -7,7 +7,7 @@ source("./02_code/Figures/data_and_libraries.R")
 library(malariasimulation)
 
 year <- 365
-month <- year/12
+month <- year / 12
 warmup <- 6 * year
 sim_length <- 1 * year
 

@@ -37,6 +37,5 @@ readRDS('./03_output/scenarios_draws.rds') %>%
 
 # the data read in above is the main dataset for the paper
 # it captures uncertainty from parameter draw runs
-# to run code on results from the median model parameters substitute:
-# readRDS('./03_output/scenarios.rds')
+
 

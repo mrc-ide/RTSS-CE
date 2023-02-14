@@ -1,25 +1,32 @@
 # Specify HPC options ----------------------------------------------------------
 library(didehpc)
-setwd('M:/Hillary/GF-RTSS-CE')
+setwd('M:/Hillary/RTSS-CE')
 
-options(didehpc.cluster = "fi--didemrchnb",
-        didehpc.username = "htopazia")
+# to edit HPC username and password below
+# usethis::edit_r_environ
 
-# transfer the new malariasimulation folder manually to contexts or delete and reinstall using conan
-# remotes::install_github('mrc-ide/malariasimulation@dev', force=T)
-src <- conan::conan_sources(c("github::mrc-ide/malariasimulation@dev", "github::mrc-ide/cali"))
-
-ctx <- context::context_save(path = "Q:/contexts",
+ctx <- context::context_save(path = "M:/Hillary/RTSS-CE/contexts/",
                              sources = c('./02_code/HPC_draws/functions_draws.R'),
-                             packages = c("dplyr", "malariasimulation", "cali"),
-                             package_sources = src)
+                             packages = c("dplyr", "malariasimulation", "cali"))
 
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didef3.dide.ic.ac.uk/malaria", "M:")
-config <- didehpc::didehpc_config(shares = share,
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
+
+config <- didehpc::didehpc_config(credentials = list(
+                                  username = Sys.getenv("DIDE_USERNAME"),
+                                  password = Sys.getenv("DIDE_PASSWORD")),
+                                  shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
                                   cluster = "fi--didemrchnb", # fi--dideclusthn OR fi--didemrchnb
+                                  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
                                   parallel = FALSE)
+
+# transfer the new malariasimulation folder manually to contexts or delete and re-install using conan
+# obj <- didehpc::queue_didehpc(ctx, config = config, provision = "later")
+# obj$install_packages("mrc-ide/cali")
+# obj$install_packages("mrc-ide/individual")
+# obj$install_packages("mrc-ide/malariaEquilibrium")
+# obj$install_packages("mrc-ide/malariasimulation")
 
 obj <- didehpc::queue_didehpc(ctx, config = config) # check for latest v. of packages
 
@@ -32,7 +39,7 @@ year <- 365
 month <- year/12
 
 # population
-population <- 200000
+population <- 100000
 
 # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
 # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
@@ -61,12 +68,13 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
 # run time
-warmup <- 6*year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
-sim_length <- 15*year
+warmup <- 6 * year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
+sim_length <- 15 * year
 
 # baseline scenarios
 ITN <- c('pyr')
-ITNuse <- c(0, 0.25, 0.30, 0.50, 0.60, 0.75)
+ITNuse <- c(0, 0.141, 0.339, 0.641, 0.231) # results in average population usages of 0, 0.20, 0.40, 0.60, 0.30 see MISC_ITN_usage_distribution.R. 0, 0.20, 0.40, 0.60 for main runs, 0.30, 0.60 for case studies
+
 resistance <- c(0, 0.4, 0.8)
 treatment <- c(0.30, 0.45, 0.60)
 SMC <- c(0, 0.85)
@@ -76,17 +84,17 @@ interventions <-
 
 
 # create combination of all runs and remove non-applicable scenarios
-baseline <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) %>%
+baseline <- crossing(population, stable, warmup, sim_length, speciesprop, interventions) |>
   filter(
     (SMC == 0 & seas_name %in% c("perennial", "seasonal")) |
-      (SMC > 0 & seas_name == 'highly seasonal')) %>% # SMC only in highly seasonal settings
-  filter(!(ITNuse == 0 & resistance != 0)) %>% # do not introduce resistance when ITNuse==0
-  filter(!(ITNuse %in% c(0.30, 0.60) & treatment %in% c(0.30, 0.60))) %>% # no 30% or 60% treatment in case studies
-  filter(!(ITNuse %in% c(0.30, 0.60) & seas_name == 'seasonal')) # no SMC in case studies
+      (SMC > 0 & seas_name == 'highly seasonal')) |> # SMC only in highly seasonal settings
+  filter(!(ITNuse == 0 & resistance != 0)) |> # do not introduce resistance when ITNuse==0
+  filter(!(ITNuse %in% c(0.231) & treatment %in% c(0.30 , 0.60))) |> # no 30% or 60% treatment in case studies
+  filter(!(ITNuse %in% c(0.231) & seas_name == 'seasonal')) # no seasonal setting in case studies
 
 
-dat1 <- baseline %>% filter(ITNuse %in% c(0, 0.25, 0.50, 0.75))
-dat2 <- baseline %>% filter(ITNuse %in% c(0.30, 0.60))
+dat1 <- baseline |> filter(ITNuse %in% c(0, 0.141, 0.339, 0.641)) # main
+dat2 <- baseline |> filter(ITNuse %in% c(0.231)) # case study
 
 baseline <- rbind(dat1, dat2)
 
@@ -133,9 +141,8 @@ getparams_baseline <- function(x){
   params <- set_demography(
     params,
     agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
+    timesteps = 0,
+    deathrates = matrix(deathrates, nrow = 1)
   )
 
   # vectors ----------
@@ -258,8 +265,8 @@ getparams_baseline <- function(x){
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -282,7 +289,7 @@ saveRDS(out, './02_code/HPC_draws/baselinescenarios.rds')
 
 
 # Run tasks -------------------------------------------------------------------
-x = c(1:nrow(out)) # 306 baseline scenarios
+x = c(1:nrow(out)) # 288 baseline scenarios
 y = c(1:50) # 50 parameter draws
 
 # define all combinations of scenarios and draws
@@ -291,13 +298,13 @@ index <- crossing(x,y)
 index$x = index$x
 
 # remove ones that have already been run
-index <- index %>% mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$x, '_', index$y, ".rds")) %>%
-  mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
-  filter(exist==0) %>%
+index <- index |> mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$x, '_', index$y, ".rds")) |>
+  mutate(exist=case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist==0) |>
   select(-f, -exist)
 
 # run a test with the first scenario
-# index <- index %>% filter(x == 271)
+# t <- obj$enqueue_bulk(index[1,], PRmatch)
 
 # submit all remaining tasks
 # t <- obj$enqueue_bulk(index, PRmatch)
@@ -315,6 +322,10 @@ map2_dfr(seq(0, nrow(index) - 100, 100),
          sjob)
 
 
+map2_dfr(seq(100, nrow(index) - 100, 100),
+         seq(199, nrow(index), 100),
+         sjob)
+
 
 
 # Results ----------------------------------------------------------------------
@@ -323,7 +334,7 @@ files <- list.files(path = "./03_output/PR_EIR", pattern = "PRmatch_draws_", ful
 dat_list <- lapply(files, function (x) readRDS(x))
 
 # concatenate
-match <-  do.call("rbind", dat_list) %>% as_tibble()
+match <-  do.call("rbind", dat_list) |> as_tibble()
 
 summary(match$starting_EIR)
 

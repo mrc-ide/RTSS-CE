@@ -1,23 +1,18 @@
 File list
 
-00_Pf_mortality_rate_table_Global_admin0_2000-2019.csv: 
-Pf mortality rate tables from malaria atlas project for the years 2000 to 2019
+00_Pf_mortality_rate_table_Global_admin0_2000-2019.csv: Pf mortality rate tables from malaria atlas project for the years 2000 to 2019
 
-00_PfPR_table_Global_admin0_2000-2019.csv: 
-PfPR tables from malaria atlas project for the years 2000 to 2019
+00_PfPR_table_Global_admin0_2000-2019.csv: PfPR tables from malaria atlas project for the years 2000 to 2019
 
-2020_GBD2021_Africa_ITN_Coverage_2019:
-raster of ITN coverage data from malaria atlas project for year 2019
+2020_GBD2021_Africa_ITN_Coverage_2019: raster of ITN coverage data from malaria atlas project for year 2019
 
-exp_demog.txt:
-exponential demography file from DIDE malaria group
+exp_demog.txt: exponential demography file from DIDE malaria group
 
-Flat_demog.txt:
-flat demography file from DIDE malaria group
+Flat_demog.txt: flat demography file from DIDE malaria group
 
 Intervention_ITN.csv: read below for info from MAP
 
-parameter_draws (FOLDER): list of model parameter draws
+parameter_draws (FOLDER): text files of model parameter draws
 
 
 ========================

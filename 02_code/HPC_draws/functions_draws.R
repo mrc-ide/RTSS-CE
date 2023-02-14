@@ -9,7 +9,7 @@ PRmatch <- function(x, y){ # x = scenario # , y = parameter draw #
   p <- unlist(data$params, recursive=F)
 
   # choose a parameter draw
-  d <- readRDS('./02_code/HPC_median/parameter_draws.rds')[y,]
+  d <- readRDS('./02_code/HPC_draws/parameter_draws.rds')[y,]
 
   # over-write malariasimulation parameters to match the parameter draw
   p$human_population = 10000
@@ -907,7 +907,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   # add in parameter draws  ----------
   # choose a parameter draw
-  d <- readRDS('./02_code/HPC_median/parameter_draws.rds')[drawID,]
+  d <- readRDS('./02_code/HPC_draws/parameter_draws.rds')[drawID,]
 
   # over-write malariasimulation parameters to match the parameter draw
   params$dd = d$dur_D
