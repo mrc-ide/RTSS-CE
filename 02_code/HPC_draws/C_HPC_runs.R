@@ -1,14 +1,9 @@
 # HPC set-up -------------------------------------------------------------------
 library(didehpc)
-setwd('M:/Hillary/GF-RTSS-CE')
+setwd('M:/Hillary/RTSS-CE')
 
-options(didehpc.cluster = "fi--didemrchnb",
-        didehpc.username = "htopazia")
-
-# transfer the new malariasimulation folder manually to contexts or delete and reinstall using conan
-# remotes::install_github('mrc-ide/malariasimulation@dev', force=T)
-
-src <- conan::conan_sources("github::mrc-ide/malariasimulation@dev")
+# to edit HPC username and password below
+# usethis::edit_r_environ
 
 sources <- c('./02_code/HPC_draws/functions_draws.R',               # parameter draw runs
              './02_code/HPC_draws/Processing/HPC_processing.R',     # one line per age group
@@ -17,22 +12,29 @@ sources <- c('./02_code/HPC_draws/functions_draws.R',               # parameter 
              './02_code/HPC_draws/Processing/outcome_averted.R',    # cases & dalys averted
              './02_code/HPC_draws/Processing/cost_effectiveness.R') # calc CE
 
-ctx <- context::context_save(path = "Q:/contexts",
+ctx <- context::context_save(path = "M:/Hillary/RTSS-CE/contexts/",
                              sources = sources,
-                             packages = c("dplyr", "malariasimulation", "purrr", "tidyr"),
-                             package_sources = src)
+                             packages = c("dplyr", "malariasimulation", "purrr", "tidyr"))
 
-share <- didehpc::path_mapping("malaria", "M:", "//fi--didef3.dide.ic.ac.uk/malaria", "M:")
+share <- didehpc::path_mapping("malaria", "M:", "//fi--didenas1/malaria", "M:")
 
-# template choices: "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core" or "32Core"
-config <- didehpc::didehpc_config(shares = share,
+config <- didehpc::didehpc_config(credentials = list(
+                                  username = Sys.getenv("DIDE_USERNAME"),
+                                  password = Sys.getenv("DIDE_PASSWORD")),
+                                  shares = share,
                                   use_rrq = FALSE,
                                   cores = 1,
-                                  cluster = "fi--didemrchnb",
-                                  template = "32Core",
+                                  cluster = "fi--didemrchnb", # fi--dideclusthn OR fi--didemrchnb
+                                  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
                                   parallel = FALSE)
 
-# obj <- didehpc::queue_didehpc(ctx, config = config, provision = "upgrade")
+# transfer the new malariasimulation folder manually to contexts or delete and re-install using conan
+# obj <- didehpc::queue_didehpc(ctx, config = config, provision = "later")
+# obj$install_packages("mrc-ide/cali")
+# obj$install_packages("mrc-ide/individual")
+# obj$install_packages("mrc-ide/malariaEquilibrium")
+# obj$install_packages("mrc-ide/malariasimulation")
+
 obj <- didehpc::queue_didehpc(ctx, config = config)
 
 
@@ -71,12 +73,12 @@ speciesprop <- data.frame(speciesprop = rbind(list(c(0.25, 0.25, 0.5))),
                           row.names = NULL)
 
 # run time
-warmup <- 6*year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
+warmup <- 21*year # needs to be multiple of 3 so that ITN dist. will line up with first timestep
 sim_length <- 15*year
 
 # interventions
 ITN <- c('pyr', 'pbo')
-ITNuse <- c(0, 0.25, 0.50, 0.75)
+ITNuse <- c(0, 0.141, 0.339, 0.641)
 ITNboost <- c(0, 1)
 resistance <- c(0, 0.4, 0.8)
 IRS <-  c(0)
@@ -92,24 +94,24 @@ interventions <-
 drawID <- c(1:50)
 
 # create combination of all runs and remove non-applicable scenarios
-combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions, drawID) %>%
+combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
   mutate(ID = paste(pfpr, seas_name, ITNuse,
-        resistance, treatment, sep="_")) %>%
-  filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set RTSS coverage when there is no RTSS
-  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) %>% # cannot set 0% coverage if RTSS is implemented
-  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) %>% # no administration of fifth doses with EPI or no RTSS
-  filter(!(seas_name == "perennial" & (RTSS == 'SV' | RTSS == "hybrid"))) %>% # do not introduce seasonal vaccination in perennial settings
-  filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
-  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always introduce SMC in highly seasonal settings
-  filter(!(ITNuse == 0 & resistance != 0)) %>% # do not introduce resistance when ITNuse==0
-  filter(!(ITN == 'pbo' & resistance == 0)) %>% # only introduce PBO in areas that have resistance
-  filter(!(ITN == 'pbo' & ITNboost == 1)) %>% # cannot have ITN boost + ITN PBO
+        resistance, treatment, sep="_")) |>
+  filter(!(RTSS == "none" & RTSScov > 0)) |> # cannot set RTSS coverage when there is no RTSS
+  filter(!(RTSScov == 0 & (RTSS == "EPI" | RTSS == 'SV' | RTSS == "hybrid"))) |> # cannot set 0% coverage if RTSS is implemented
+  filter(!(fifth == 1 & (RTSS == "EPI" | RTSS == 'none'))) |> # no administration of fifth doses with EPI or no RTSS
+  filter(!(seas_name == "perennial" & (RTSS == 'SV' | RTSS == "hybrid"))) |> # do not introduce seasonal vaccination in perennial settings
+  filter(!(SMC > 0 & seas_name == "perennial")) |> # do not administer SMC in perennial settings
+  filter(!(SMC == 0 & seas_name == "highly seasonal")) |> # always introduce SMC in highly seasonal settings
+  filter(!(ITNuse == 0 & resistance != 0)) |> # do not introduce resistance when ITNuse==0
+  filter(!(ITN == 'pbo' & resistance == 0)) |> # only introduce PBO in areas that have resistance
+  filter(!(ITN == 'pbo' & ITNboost == 1)) |> # cannot have ITN boost + ITN PBO
   filter(!(ITN == 'pbo' & ITNuse == 0)) # cannot switch to PBO when ITNuse==0
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC_draws/EIRestimates.rds")
 
-combo <- combo %>% left_join(match, by = c('drawID', 'ID')) %>%
+combo <- combo |> left_join(match, by = c('drawID', 'ID')) |>
   # put variables into the same order as function arguments
   select(population,        # simulation population
          seasonality,       # seasonal profile
@@ -131,7 +133,7 @@ combo <- combo %>% left_join(match, by = c('drawID', 'ID')) %>%
          fifth,             # status of 5th dose for SV or hybrid strategies
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) %>% as.data.frame()
+  ) |> as.data.frame()
 
 
 saveRDS(combo, './02_code/HPC_draws/scenarios.rds')
@@ -144,13 +146,13 @@ x = c(1:nrow(combo)) # 128,700 runs
 index <- crossing(x)
 
 # remove ones that have already been run
-index <- index %>% mutate(f = paste0("./03_output/HPC/general_", index$x, ".rds")) %>%
-  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
-  filter(exist == 0) %>%
+index <- index |> mutate(f = paste0("./03_output/HPC/general_", index$x, ".rds")) |>
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist == 0) |>
   select(-f, -exist)
 
 # run a test with the first scenario
-# index <- index %>% filter(x == 1)
+# index <- index |> filter(x == 1)
 
 # submit all remaining tasks
 # t <- obj$enqueue_bulk(index, runsimGF)
@@ -168,6 +170,22 @@ map2_dfr(seq(0, nrow(index) - 100, 100),
          seq(99, nrow(index), 100),
          sjob)
 
+config <- didehpc::didehpc_config(credentials = list(
+  username = Sys.getenv("DIDE_USERNAME"),
+  password = Sys.getenv("DIDE_PASSWORD")),
+  shares = share,
+  use_rrq = FALSE,
+  cores = 1,
+  cluster = "fi--didemrchnb", # fi--dideclusthn OR fi--didemrchnb
+  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+  parallel = FALSE)
+
+obj <- didehpc::queue_didehpc(ctx, config = config)
+
+map2_dfr(seq(7000, 10000 - 100, 100),
+         seq(7099, 10000, 100),
+         sjob)
+
 
 
 # Processing -------------------------------------------------------------------
@@ -179,9 +197,9 @@ y <- seq(1000, length(index), 1000)
 data <- tibble(x, y)
 data <- rbind(data, c(128001, length(index))) # add final row
 
-data <- data %>% mutate(f = paste0("./03_output/HPC_processing/run_", x, "_", y, ".rds")) %>%
-  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
-  filter(exist == 0) %>%
+data <- data |> mutate(f = paste0("./03_output/HPC_processing/run_", x, "_", y, ".rds")) |>
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist == 0) |>
   select(-f, -exist)
 
 t <- obj$enqueue_bulk(data, cost_effectiveness)
@@ -235,7 +253,7 @@ sim_length <- 15*year
 
 # interventions
 ITN <- c('pyr')
-ITNuse <-  c(0.30, 0.50, 0.60)
+ITNuse <-  c(0.231, 0.473, 0.641) # 0.30, 0.50, 0.60
 ITNboost <- c(0,1)
 resistance <- c(0)
 IRS <-  c(0)
@@ -253,21 +271,21 @@ drawID <- c(1:50)
 name <- "casestudy"
 
 # create combination of all runs and remove non-applicable scenarios
-combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions, drawID) %>%
+combo <- crossing(population, stable, warmup, sim_length, speciesprop, interventions, drawID) |>
   mutate(ID = paste(pfpr, seas_name, ITNuse,
-                    resistance, treatment, sep="_")) %>%
-  mutate(name = paste0(name, "_", row_number())) %>%
-  filter(!(RTSS == "none" & RTSScov > 0)) %>% # cannot set RTSS coverage when there is no RTSS
-  filter(!(RTSScov == 0 & RTSS == "EPI")) %>% # cannot set 0% coverage if RTSS is implemented
-  filter(!(SMC > 0 & seas_name == "perennial")) %>% # do not administer SMC in perennial settings
-  filter(!(SMC == 0 & seas_name == "highly seasonal")) %>% # always introduce SMC in highly seasonal settings
+                    resistance, treatment, sep="_")) |>
+  mutate(name = paste0(name, "_", row_number())) |>
+  filter(!(RTSS == "none" & RTSScov > 0)) |> # cannot set RTSS coverage when there is no RTSS
+  filter(!(RTSScov == 0 & RTSS == "EPI")) |> # cannot set 0% coverage if RTSS is implemented
+  filter(!(SMC > 0 & seas_name == "perennial")) |> # do not administer SMC in perennial settings
+  filter(!(SMC == 0 & seas_name == "highly seasonal")) |> # always introduce SMC in highly seasonal settings
   filter(!(seas_name == 'seasonal'))
 
 
 # EIR / prev match from 'PfPR_EIR_match.R'
 match <- readRDS("./02_code/HPC_draws/EIRestimates.rds")
 
-combo <- combo %>% left_join(match, by = c('drawID', 'ID')) %>%
+combo <- combo |> left_join(match, by = c('drawID', 'ID')) |>
   # put variables into the same order as function arguments
   select(population,        # simulation population
          seasonality,       # seasonal profile
@@ -289,7 +307,7 @@ combo <- combo %>% left_join(match, by = c('drawID', 'ID')) %>%
          fifth,             # status of 5th dose for SV or hybrid strategies
          ID,                # name of output file
          drawID             # parameter draw no.
-  ) %>% as.data.frame()
+  ) |> as.data.frame()
 
 
 saveRDS(combo, './02_code/HPC_draws/scenarios_casestudy.rds')
@@ -302,16 +320,16 @@ x = c(1:nrow(combo)) # 5,400 runs
 index <- crossing(x)
 
 # remove ones that have already been run
-index <- index %>% mutate(f = paste0("./03_output/HPC/casestudy_", index$x, ".rds")) %>%
-  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) %>%
-  filter(exist == 0) %>%
+index <- index |> mutate(f = paste0("./03_output/HPC/casestudy_", index$x, ".rds")) |>
+  mutate(exist = case_when(file.exists(f) ~ 1, !file.exists(f) ~ 0)) |>
+  filter(exist == 0) |>
   select(-f, -exist)
 
 # run a test with the first scenario
-# index <- index %>% filter(x == 1)
+# index <- index |> filter(x == 1)
 
 # submit all remaining tasks
-# t <- obj$enqueue_bulk(index, runsimGF_casestudy)
+# t <- obj$enqueue_bulk(index, runsimGF_casestudy
 # t$status()
 
 # submit jobs, 100 as a time
@@ -322,7 +340,7 @@ sjob <- function(x, y){
 
 }
 
-map2_dfr(seq(1, nrow(index) - 100, 100),
+map2_dfr(seq(0, nrow(index) - 100, 100),
          seq(99, nrow(index), 100),
          sjob)
 
@@ -338,11 +356,6 @@ sources <- c('./02_code/HPC_draws/functions_draws.R',               # parameter 
              './02_code/HPC_draws/Processing_casestudy/add_costs.R',          # add cost estimates
              './02_code/HPC_draws/Processing_casestudy/outcome_averted.R',    # cases & dalys averted
              './02_code/HPC_draws/Processing_casestudy/cost_effectiveness.R') # calc CE
-
-ctx <- context::context_save(path = "Q:/contexts",
-                             sources = sources,
-                             packages = c("dplyr", "malariasimulation", "purrr", "tidyr"),
-                             package_sources = src)
 
 obj <- didehpc::queue_didehpc(ctx, config = config)
 

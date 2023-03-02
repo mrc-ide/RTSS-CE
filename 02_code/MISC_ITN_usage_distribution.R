@@ -2,6 +2,7 @@
 
 library(netz)
 
+# test various dist values until values match target ITN values
 model_usage <- netz::population_usage(distribution = rep(0.858, 10),
                                       timesteps = 30 * 365,
                                       distribution_timesteps = seq(1, 30, 3) * 365,

@@ -208,7 +208,7 @@ getparams_baseline <- function(x){
 
     coverages = c(rep(ITNuse1, npre),         # set baseline coverage
                   rep(ITNuse2, npost)),    # set intervention coverage
-    retention = 3 * year,
+    retention = 5 * year,
     dn0 = matrix(c(rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost)),
@@ -319,11 +319,6 @@ sjob <- function(x, y){
 
 map2_dfr(seq(0, nrow(index) - 100, 100),
          seq(99, nrow(index), 100),
-         sjob)
-
-
-map2_dfr(seq(100, nrow(index) - 100, 100),
-         seq(199, nrow(index), 100),
          sjob)
 
 
