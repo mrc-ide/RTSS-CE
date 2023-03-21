@@ -18,7 +18,7 @@ config <- didehpc::didehpc_config(credentials = list(
                                   use_rrq = FALSE,
                                   cores = 1,
                                   cluster = "fi--didemrchnb", # fi--dideclusthn OR fi--didemrchnb
-                                  template = "32Core", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
+                                  template = "GeneralNodes", # "GeneralNodes", "12Core", "16Core", "12and16Core", "20Core", "24Core", "32Core"
                                   parallel = FALSE)
 
 # transfer the new malariasimulation folder manually to contexts or delete and re-install using conan
@@ -73,7 +73,7 @@ sim_length <- 15 * year
 
 # baseline scenarios
 ITN <- c('pyr')
-ITNuse <- c(0, 0.141, 0.339, 0.641, 0.231) # results in average population usages of 0, 0.20, 0.40, 0.60, 0.30 see MISC_ITN_usage_distribution.R. 0, 0.20, 0.40, 0.60 for main runs, 0.30, 0.60 for case studies
+ITNuse <- c(0, 0.141, 0.339, 0.641, 0.231, 0.473) # results in average population usages of 0, 0.20, 0.40, 0.60, 0.30 see MISC_ITN_usage_distribution.R. 0, 0.20, 0.40, 0.60 for main runs, 0.30, 0.50, 0.60 for case studies
 
 resistance <- c(0, 0.4, 0.8)
 treatment <- c(0.30, 0.45, 0.60)
@@ -89,12 +89,12 @@ baseline <- crossing(population, stable, warmup, sim_length, speciesprop, interv
     (SMC == 0 & seas_name %in% c("perennial", "seasonal")) |
       (SMC > 0 & seas_name == 'highly seasonal')) |> # SMC only in highly seasonal settings
   filter(!(ITNuse == 0 & resistance != 0)) |> # do not introduce resistance when ITNuse==0
-  filter(!(ITNuse %in% c(0.231) & treatment %in% c(0.30 , 0.60))) |> # no 30% or 60% treatment in case studies
-  filter(!(ITNuse %in% c(0.231) & seas_name == 'seasonal')) # no seasonal setting in case studies
+  filter(!(ITNuse %in% c(0.231, 0.473) & treatment %in% c(0.30 , 0.60))) |> # no 30% or 60% treatment in case studies
+  filter(!(ITNuse %in% c(0.231, 0.473) & seas_name == 'seasonal')) # no seasonal setting in case studies
 
 
 dat1 <- baseline |> filter(ITNuse %in% c(0, 0.141, 0.339, 0.641)) # main
-dat2 <- baseline |> filter(ITNuse %in% c(0.231)) # case study
+dat2 <- baseline |> filter(ITNuse %in% c(0.231, 0.473)) # case study
 
 baseline <- rbind(dat1, dat2)
 
@@ -287,15 +287,12 @@ out <- map_dfr(seq(1, nrow(baseline), 1), getparams_baseline)
 saveRDS(out, './02_code/HPC_draws/baselinescenarios.rds')
 
 
-
 # Run tasks -------------------------------------------------------------------
-x = c(1:nrow(out)) # 288 baseline scenarios
+x = c(1:nrow(out)) # 306 baseline scenarios
 y = c(1:50) # 50 parameter draws
 
 # define all combinations of scenarios and draws
-
 index <- crossing(x,y)
-index$x = index$x
 
 # remove ones that have already been run
 index <- index |> mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$x, '_', index$y, ".rds")) |>
@@ -313,7 +310,6 @@ index <- index |> mutate(f = paste0("./03_output/PR_EIR/PRmatch_draws_", index$x
 sjob <- function(x, y){
 
   t <- obj$enqueue_bulk(index[x:y,], PRmatch)
-  1
 
 }
 

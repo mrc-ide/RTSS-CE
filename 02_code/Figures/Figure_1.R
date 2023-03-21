@@ -169,6 +169,6 @@ ggplot() +
         panel.grid = element_line(color = "#F5F5F5", size = 0.2))
 
 # save
-ggsave('./03_output/figure1v2.pdf', width = 8, height = 3.5)
+ggsave('./03_output/figure1.pdf', width = 8, height = 3.5)
 
 

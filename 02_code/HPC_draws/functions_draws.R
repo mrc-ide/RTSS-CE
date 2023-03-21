@@ -157,9 +157,8 @@ runsimGF <- function(x){ # x = scenario #
   params <- set_demography(
     params,
     agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
+    timesteps = 0,
+    deathrates = matrix(deathrates, nrow = 1)
   )
 
   # vectors ----------
@@ -325,8 +324,8 @@ runsimGF <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -350,8 +349,8 @@ runsimGF <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -365,9 +364,8 @@ runsimGF <- function(x){ # x = scenario #
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
+      coverages = RTSScov,
+      timesteps = warmup,
       age = round(6*month),
       min_wait = 0,
       boosters = boosters,
@@ -542,6 +540,7 @@ runsimGF <- function(x){ # x = scenario #
            seasonality = seas_name,
            speciesprop = paste(speciesprop, sep = ',', collapse = ''),
            ITN = ITN,
+           ITN2 = ITNuse2,
            ITNuse = ITNuse,
            ITNboost = ITNboost,
            resistance,
@@ -563,7 +562,7 @@ runsimGF <- function(x){ # x = scenario #
 
     # only necessary variables
     dplyr::select(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  ITN, ITN2, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
                   starts_with("n_inc_severe"), starts_with("p_inc_severe"),
                   starts_with("n_rtss"),
                   starts_with("n_inc"), starts_with("p_inc"),
@@ -573,7 +572,7 @@ runsimGF <- function(x){ # x = scenario #
 
     # take means of populations and sums of cases by month
     group_by(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-             ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+             ITN, ITN2, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
              bednet_timesteps, smc_timesteps, rtss_mass_timesteps) |>
 
     mutate_at(vars(n_0_91.25:n_36500_73000, n_730_3650,
@@ -645,7 +644,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
   params$prevalence_rendering_min_ages = 2 * year
   params$prevalence_rendering_max_ages = 10 * year
 
-  # demography ----------
+# demography ----------
   flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
   ages <- round(flat_demog$V3 * year) # top of age bracket
   deathrates <- flat_demog$V5 / 365 # age-specific death rates
@@ -653,9 +652,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
   params <- set_demography(
     params,
     agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
+    timesteps = 0,
+    deathrates = matrix(deathrates, nrow = 1)
   )
 
   # vectors ----------
@@ -821,8 +819,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -846,8 +844,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -861,9 +859,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
+      coverages = RTSScov,
+      timesteps = warmup,
       age = round(6*month),
       min_wait = 0,
       boosters = boosters,

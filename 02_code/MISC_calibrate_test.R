@@ -1,4 +1,4 @@
-# testing calibration function
+# testing calibration function for PfPR 2-10 from warmup years 6-9
 library(tidyverse)
 library(malariasimulation)
 library(cali)
