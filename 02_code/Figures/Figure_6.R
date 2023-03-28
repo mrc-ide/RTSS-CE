@@ -10,13 +10,6 @@ output <- readRDS("./03_output/dalyoutput_draws_casestudy.rds") |>
   ungroup() |>
   filter(cost_per_dose == 12.01 & delivery_cost == 1.62)
 
-summary(output$cost_total)
-summary(output$daly)
-summary(output$cases)
-summary(output$annual_percapita_nets_distributed)
-table(output$seasonality, output$ITNuse, useNA = "always")
-table(output$seasonality, output$RTSScov, useNA = "always")
-table(output$seasonality, output$pfpr, useNA = "always")
 
 # gap in PfPR
 output_pfpr <- output |>
@@ -124,7 +117,7 @@ plot_equity <- function(var){ # var = cases, deaths, or daly
   }
   if(deparse(substitute(var)) == "cases"){
     name <- "cases"
-    xlim <- c(-25, 10)
+    xlim <- c(-65, 10)
     ylim <- c(0, 110)
   }
   if(deparse(substitute(var)) == "deaths"){
@@ -178,9 +171,9 @@ P2 <- C + geom_hline(yintercept = 0, lty=2, color="grey") +
        title = "cases",
        shape = "baseline scenario",
        color = "intervention") +
-  geom_segment(aes(x = 10, xend = -25, y = -15, yend = -15),
+  geom_segment(aes(x = 10, xend = -65, y = -15, yend = -15),
                arrow=arrow(length=unit(0.2,"cm")), color = "cornflowerblue", size = 1) +
-  geom_segment(aes(x = -28.5, xend = -28.5, y = 110, yend = 5),
+  geom_segment(aes(x = -72.5, xend = -72.5, y = 110, yend = 7),
                arrow=arrow(length=unit(0.2,"cm")), color = "cornflowerblue", size = 1) +
   scale_x_continuous(breaks = c(0)) +
   scale_y_continuous(breaks = c(0))

@@ -128,11 +128,11 @@ output |> filter(costRTSS >= 9.3) |> group_by(pfpr) |>
   ungroup() |>
   mutate(t = sum(n), p = n/t * 100)
 
-# median cost when ITNs and SMC are not maximized
-test <- output |> filter(ITNuse == 0.75 | SMC == 0.85)
+# median cost when ITNs and SMC are and are not maximized
+test <- output |> filter(ITNuse == 0.60 | SMC == 0.85)
 summary(test$costRTSS)
 
-test <- output |> filter(!(ITNuse == 0.75 | SMC == 0.85))
+test <- output |> filter(!(ITNuse == 0.60 | SMC == 0.85))
 summary(test$costRTSS)
 
 
@@ -190,7 +190,6 @@ B <- ggplot(output3) +
 # combined plot
 A + B + plot_annotation(tag_levels = "A")
 
-   # coord_cartesian(xlim = c(0, 12), ylim = c(0, 100))) +
 
 ggsave("./03_output/figure5.pdf", width = 12, height = 4)
 

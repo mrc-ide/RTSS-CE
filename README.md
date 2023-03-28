@@ -38,13 +38,9 @@ Strategic resource allocation to maximize the impact of malaria response.
 |   |   ├── Processing_casestudy           # Data processing - case study
 |   |   |   ├── cost_effectiveness.R         # Process CE
 |   |   |   ├── HPC_processing.R             # Helper-function HPC output
-|   |   |   ├── add_costs.R                  # Helper-function add costs
-|   |   |   ├── deaths_dalys.R               # Helper-function calc deaths & DALYs
-|   |   |   ├── netz_dist.R                  # Helper-function calc nets distributed
-|   |   |   ├── outcome_averted.R            # Helper-function calc DALYs and cases averted
 |   ├── Figures                            # Re-create paper figures
+|   ├── MISC_calibrate_test.R              # Test calibration output function
 |   ├── MISC_ITN_usage_distribution.R      # Determine model input ITN coverage values to reach population usages
-|   ├── MISC_seasonality_script.R          # Visualize timing of seasonal interventions
 |   ├── MISC_SMCdosetest.R                 # Determine which SMC profiles should be used
 |   ├── MISC_warmup_time_test.R            # Determine the warmup time needed
 ├── 03_output                              # PDF figures and .rds files

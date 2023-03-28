@@ -196,6 +196,11 @@ files <- list.files(path = "./03_output/HPC_processing/", pattern = "run*", full
 dat_list <- lapply(files, function (x) readRDS(x))
 dalyoutput <- data.table::rbindlist(dat_list, fill = TRUE, idcol = "identifier")
 
+# take out areas where ITN use == 0 and where resistance is high and ITN 10% increase intervention is used
+dalyoutput <- dalyoutput |>
+  filter(!(resistance == 0.8 & ITNboost == 1)) |>
+  filter(ITNuse != 0)
+
 # save output
 saveRDS(dalyoutput, "./03_output/dalyoutput_draws.rds")
 

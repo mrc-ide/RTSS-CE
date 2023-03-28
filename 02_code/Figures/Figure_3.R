@@ -230,8 +230,10 @@ A <- ggplot(data = output, aes(x = deltadaly, y = deltacost)) +
        x = "change in DALYs averted",
        color = "intervention")
 
+colors <- c(itn, rtss_sv, smc, itn_rtss, itn_smc, itn_rtss_smc)
+
 # removing dominated strategies
-B <- output |>
+output2 <- output |>
   # filter out mixed strategies
   group_by(ID) |> arrange(ID, deltacost) |>
   filter(!(deltadaly < 0 & deltacost > 0)) |>
@@ -326,9 +328,9 @@ B <- output |>
                               ICER > lead(ICER, n=2L) ~ 1,
                               ICER > lead(ICER, n=1L) ~ 1,
                               TRUE ~ 0)) |>
-  filter(dominate == 0) |>
+  filter(dominate == 0)
 
-  ggplot(mapping = aes(x = deltadaly, y = deltacost)) +
+B <- ggplot(data = output2, mapping = aes(x = deltadaly, y = deltacost)) +
   geom_line(aes(group = as.factor(ID)), color = "lightgrey",
             size = .5, alpha = 0.2) +
   geom_point(aes(color = intervention_f), size = 2, alpha = 0.6, show.legend = F) +
@@ -348,4 +350,18 @@ B <- output |>
 A + B + plot_layout(guides = "collect", nrow=2) + plot_annotation(tag_levels = "A")
 
 ggsave(paste0("./03_output/figure3_all.pdf"), width = 12, height = 7)
+
+
+# tabulate
+merge <- output |> left_join(output2) |>
+  mutate(dominate = ifelse(is.na(dominate), 1, dominate))
+
+# group results by seasonality and intervention
+merge |> group_by(seasonality, intervention_f) |>
+  summarize(t = n(),
+            ndominate = n()-sum(dominate),
+            p_ndominate = ndominate / t*100,
+            ICER_m = median(ICER, na.rm=T),
+            ICER_25 = quantile(ICER, prob=0.25, na.rm=T),
+            ICER_75 = quantile(ICER, prob=0.75, na.rm=T))
 

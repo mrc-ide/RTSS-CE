@@ -5,7 +5,7 @@ library(tidyverse)
 library(data.table)
 library(patchwork)
 library(grid)
-library(LaCroixColoR) # devtools::install_github('johannesbjork/LaCroixColoR')
+library(LaCroixColoR) # devtools::install_github("johannesbjork/LaCroixColoR")
 
 # color palette
 # lacroix_palette(type = "paired")
@@ -25,14 +25,10 @@ pbo_rtss     <- "#EF7C12"
 itn_rtss     <- "#F4B95A"
 
 # load data
-scenarios <- readRDS('./03_output/scenarios_draws.rds') %>%
+scenarios <- readRDS("./03_output/scenarios_draws.rds") |>
   # remove scenarios with a negative impact on DALYs
-  mutate(dalydiff = daly_baseline - daly) %>%
+  mutate(dalydiff = daly_baseline - daly) |>
   filter(dalydiff >= 0)
-
-readRDS('./03_output/scenarios_draws.rds') %>%
-  group_by(ID, ITN, ITNboost, SMC, RTSS) %>%
-  summarize(n = n()) # 2,304 scenarios per parameter draw
 
 
 # the data read in above is the main dataset for the paper
