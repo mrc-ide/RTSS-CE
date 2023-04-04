@@ -26,7 +26,7 @@ compare_vax <- function(comparison){
   }
 
   if(comparison == "ITN 10% increase"){
-    scenarios2 <- scenarios
+    scenarios2 <- scenarios |> filter(resistance < 0.8)
   }
 
   output <- scenarios2 |>
@@ -98,12 +98,6 @@ output3 <- output |> ungroup() |> group_by(drawID, comparison) |> arrange(costRT
 
 # create median lines and points for plot
 segments <- data.frame(
-  x = c(2, -20, 5, -20, 9.3, -10, 10, -20, 13.5, -20),
-  xend = c(2, 2, 5, 5, 9.3, 9.3, 10, 10, 13.5, 13.5),
-  y = c(-10, dose2, -10, dose5, -10, dose93, -10,  dose10, -10, dose135),
-  yend = c(dose2, dose2, dose5, dose5, dose93, dose93, dose10, dose10, dose135, dose135))
-
-segments <- data.frame(
   x = c(2, 5, 9.3, 13.5,
         rep(-10, length(points$cost))),
   xend = c(2, 5, 9.3, 13.5,
@@ -134,5 +128,4 @@ ggplot(output3) +
 
 
 ggsave("./03_output/figureS5.pdf", width = 8, height = 5)
-
 

@@ -214,7 +214,7 @@ output <- scenarios |>
 colors <- c(itn, rtss_age, rtss_sv, smc, itn_rtss, itn_smc, rtss_smc, itn_rtss_smc)
 
 # plot all interventions, by baseline ITNuse and seasonality
-A <- ggplot(data = output, aes(x = deltadaly, y = deltacost)) +
+A <- ggplot(data = output, aes(x = deltadaly, y = deltacost / 1000000)) +
   geom_line(aes(group = as.factor(ID)), color = "lightgrey",
             size = .5, alpha = 0.2) +
   geom_point(aes(color = intervention_f), size = 2, alpha = 0.6) +
@@ -223,10 +223,12 @@ A <- ggplot(data = output, aes(x = deltadaly, y = deltacost)) +
   facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
+  scale_x_continuous(labels = scales::comma) +
+  scale_y_continuous(labels = scales::comma) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         text = element_text(size = 14)) +
   labs(title = "All strategies",
-       y = "change in cost (USD)",
+       y = "change in cost (millions, USD)",
        x = "change in DALYs averted",
        color = "intervention")
 
@@ -330,7 +332,7 @@ output2 <- output |>
                               TRUE ~ 0)) |>
   filter(dominate == 0)
 
-B <- ggplot(data = output2, mapping = aes(x = deltadaly, y = deltacost)) +
+B <- ggplot(data = output2, mapping = aes(x = deltadaly, y = deltacost / 1000000)) +
   geom_line(aes(group = as.factor(ID)), color = "lightgrey",
             size = .5, alpha = 0.2) +
   geom_point(aes(color = intervention_f), size = 2, alpha = 0.6, show.legend = F) +
@@ -339,10 +341,12 @@ B <- ggplot(data = output2, mapping = aes(x = deltadaly, y = deltacost)) +
   facet_grid(~ seasonality, scales = "free") +
   theme_classic() +
   scale_color_manual(values = colors) +
+  scale_x_continuous(labels = scales::comma) +
+  scale_y_continuous(labels = scales::comma) +
   theme(axis.text.x = element_text(angle = 45, hjust=1),
         text = element_text(size = 14)) +
   labs(title = "Dominated strategies removed",
-       y = "change in cost (USD)",
+       y = "change in cost (millions, USD)",
        x = "change in DALYs averted",
        color = "intervention") +
   theme(plot.caption.position = "plot")
