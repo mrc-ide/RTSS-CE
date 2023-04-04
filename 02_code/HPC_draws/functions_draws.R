@@ -175,7 +175,7 @@ runsimGF <- function(x){ # x = scenario #
 
   # ITNs ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w
-  # or in Table S1.3 of Ellie's 2021 paper
+  # or in Table S1.3 of https://www.sciencedirect.com/science/article/pii/S2542519621002965#sec1
   # same value for all species
   bednet_timesteps <- c(0)
 
@@ -670,7 +670,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   # ITNs ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w
-  # or in Table S1.3 of Ellie's 2021 paper
+  # or in Table S1.3 of https://www.sciencedirect.com/science/article/pii/S2542519621002965#sec1
   # same value for all species
   bednet_timesteps <- c(0)
 
