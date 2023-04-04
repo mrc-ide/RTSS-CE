@@ -38,20 +38,9 @@ Strategic resource allocation to maximize the impact of malaria response.
 |   |   ├── Processing_casestudy           # Data processing - case study
 |   |   |   ├── cost_effectiveness.R         # Process CE
 |   |   |   ├── HPC_processing.R             # Helper-function HPC output
-|   |   |   ├── add_costs.R                  # Helper-function add costs
-|   |   |   ├── deaths_dalys.R               # Helper-function calc deaths & DALYs
-|   |   |   ├── netz_dist.R                  # Helper-function calc nets distributed
-|   |   |   ├── outcome_averted.R            # Helper-function calc DALYs and cases averted
-|   ├── HPC_median                         # HPC runs for median parameter values
-|   |   ├── A_PfPR_EIR_match.R               # Match PfPR to EIR
-|   |   ├── B_HPC_runs.R                     # Run malariasimulation scenarios on HPC
-|   |   ├── C_HPC_processing.R               # Process model output
-|   |   ├── D_HPC_case_studies.R             # Process equity analysis output
-|   |   ├── E_cost_effectiveness.R           # Process model output, cost-effectiveness variables
-|   |   ├── functions.R                      # Functions for HPC
 |   ├── Figures                            # Re-create paper figures
-|   ├── MISC_ITN_PR_distributions.R        # Visualize world ITN use and PfPR patterns
-|   ├── MISC_seasonality_script.R          # Visualize timing of seasonal interventions
+|   ├── MISC_calibrate_test.R              # Test calibration output function
+|   ├── MISC_ITN_usage_distribution.R      # Determine model input ITN coverage values to reach population usages
 |   ├── MISC_SMCdosetest.R                 # Determine which SMC profiles should be used
 |   ├── MISC_warmup_time_test.R            # Determine the warmup time needed
 ├── 03_output                              # PDF figures and .rds files

@@ -6,13 +6,13 @@ PRmatch <- function(x, y){ # x = scenario # , y = parameter draw #
   data <- readRDS('./02_code/HPC_draws/baselinescenarios.rds')[x,]
 
   # choose a parameter set from baseline scenarios
-  p <- unlist(data$params, recursive=F)
+  p <- unlist(data$params, recursive = F)
 
   # choose a parameter draw
-  d <- readRDS('./02_code/HPC_median/parameter_draws.rds')[y,]
+  d <- readRDS('./02_code/HPC_draws/parameter_draws.rds')[y,]
 
   # over-write malariasimulation parameters to match the parameter draw
-  p$human_population = 10000
+  p$human_population = 100000
   p$dd = d$dur_D
   p$dt = d$dur_T
   p$da = d$dur_A # value 195 from the old model is the right one! New says 200
@@ -66,22 +66,31 @@ PRmatch <- function(x, y){ # x = scenario # , y = parameter draw #
   # define target: PfPR2-10 value
   target <- data$pfpr
 
-  # time points at which to match target = years 4 to 6
+  # write function for time points to average PfPR - years 7-9
   year <- 365
-  target_tt <- seq(4*year, 6*year, 100)
+  p$timesteps <- 9 * year # simulation run time = 9 years
+
+  summary_mean_pfpr_2_10_6y9y <- function(x){
+
+    x$year <- ceiling(x$timestep / year)
+    x <- x |> filter(year >= 7) # average of final 3 years of simulation
+    prev_2_10 <- mean(x$n_detect_730_3650 / x$n_730_3650)
+    return(prev_2_10)
+
+  }
 
   # run calibration model
   set.seed(123)
-  out <- calibrate(parameters = p,
-                   target = target,
-                   target_tt = target_tt,
-                   summary_function = summary_pfpr_2_10,
-                   tolerance = 0.02,
-                   interval = c(.0001, 500))
+  out <- cali::calibrate(parameters = p,
+                         target = target,
+                         summary_function = summary_mean_pfpr_2_10_6y9y,
+                         tolerance = 0.02,
+                         low = 0.001,
+                         high = 500)
 
   # store init_EIR results as an .rds file to be read in later
   PR <- data.frame(scenarioID = x, drawID = y)
-  PR$starting_EIR <- out$root
+  PR$starting_EIR <- out
   PR$ID <- data$ID
 
   saveRDS(PR, paste0('./03_output/PR_EIR/PRmatch_draws_', x , '_', y, '.rds'))
@@ -148,9 +157,8 @@ runsimGF <- function(x){ # x = scenario #
   params <- set_demography(
     params,
     agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
+    timesteps = 0,
+    deathrates = matrix(deathrates, nrow = 1)
   )
 
   # vectors ----------
@@ -167,7 +175,7 @@ runsimGF <- function(x){ # x = scenario #
 
   # ITNs ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w
-  # or in Table S1.3 of Ellie's 2021 paper
+  # or in Table S1.3 of https://www.sciencedirect.com/science/article/pii/S2542519621002965#sec1
   # same value for all species
   bednet_timesteps <- c(0)
 
@@ -204,7 +212,13 @@ runsimGF <- function(x){ # x = scenario #
                         ITN=='pbo' & resistance==0.8 ~ 1.311)
 
   ITNuse1 = ITNuse
-  ITNuse2 = ITNuse1 + .10   # ITN boost by 10%
+  ITNuse2 = case_when(ITNuse1 == 0 ~  0.066, # pop use 0 to 0.10
+                      ITNuse1 == 0.066 ~  0.141, # pop use 0.10 to 0.20
+                      ITNuse1 == 0.141 ~  0.231, # pop use 0.20 to 0.30
+                      ITNuse1 == 0.231 ~  0.339, # pop use 0.30 to 0.40
+                      ITNuse1 == 0.339 ~  0.473, # pop use 0.40 to 0.50
+                      ITNuse1 == 0.473 ~  0.641, # pop use 0.50 to 0.60
+                      ITNuse1 == 0.641 ~  0.858) # pop use 0.60 to 0.70
 
   if (ITNboost == 0) {      # if ITNs are not boosted, keep ITN use constant
     ITNuse2 = ITNuse1
@@ -220,7 +234,7 @@ runsimGF <- function(x){ # x = scenario #
 
     coverages = c(rep(ITNuse1, npre),         # set baseline coverage
                   rep(ITNuse2, npost)),    # set intervention coverage
-    retention = 3 * year,
+    retention = 5 * year,
     dn0 = matrix(c(rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost)),
@@ -310,8 +324,8 @@ runsimGF <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -335,8 +349,8 @@ runsimGF <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -350,9 +364,8 @@ runsimGF <- function(x){ # x = scenario #
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
+      coverages = RTSScov,
+      timesteps = warmup,
       age = round(6*month),
       min_wait = 0,
       boosters = boosters,
@@ -365,21 +378,27 @@ runsimGF <- function(x){ # x = scenario #
 
   if (RTSS == "SV") {
     peak <- peak_season_offset(params)
-    first <- round(warmup+(peak-month*3.5),0)
+    if(seas_name == "highly seasonal"){
+      first <- round(warmup + (peak - month * 3.5), 0)}
+    if(seas_name == "seasonal"){
+      first <- round(warmup + (peak - month * 5.5), 0)}
     timesteps <- c(first, first+seq(year, sim_length, year))
-    params$rtss_doses <- round(c(0,1*month,2*month))
+    params$rtss_doses <- round(c(0, 1 * month, 2 * month))
 
-    boosters <- if(fifth==0) round(c(12*month+2*month)) else round(c(12*month+2*month, 24*month+2*month))
+    boosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month))
 
     params <- set_mass_rtss(
       parameters = params,
       timesteps = timesteps,
       coverages = rep(RTSScov,length(timesteps)),
-      min_ages = round(5*month),
-      max_ages = round(17*month),
+      min_ages = round(5 * month),
+      max_ages = round(17 * month),
       min_wait = 0,
       boosters = boosters,
       booster_coverage = rep(.80, length(boosters)))
+
+    # update booster to have same effect as dose 3 per Thompson et al. 2022
+    params$rtss_cs_boost <- c(6.37008, 0.35)
 
     rtss_mass_timesteps <- params$rtss_mass_timesteps - warmup
 
@@ -387,27 +406,36 @@ runsimGF <- function(x){ # x = scenario #
 
   # hybrid ----------
   if (RTSS == "hybrid") {
-    params$rtss_doses <- round(c(0,1.5*month,3*month))
+    params$rtss_doses <- round(c(0, 1.5 * month, 3 * month))
 
     peak <- peak_season_offset(params)
-    first <- round(warmup+(peak-month*3.5),0)
-    boosters <- if(fifth==0) round(c(first+3*month),0) else round(((first+3*month) + c(0, year)),0)
+
+    if(seas_name == "highly seasonal"){
+      boost <- round((peak - month * 1.5), 0)}
+    if(seas_name == "seasonal"){
+      boost <- round((peak - month * 3.5), 0)}
+
+    boosters <- if(fifth == 0) boost else c(boost, boost + year)
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
-      age = round(6*month),
-      min_wait = 0,
+      coverages = RTSScov,
+      timesteps = warmup,
+      age = round(6 * month),  # 6, 7,5, 9 months
+      min_wait = round(6 * month),
       boosters = boosters,
       booster_coverage = rep(.80, length(boosters)),
       seasonal_boosters = TRUE)
+
+    # update booster to have same effect as dose 3 per Thompson et al. 2022
+    params$rtss_cs_boost <- c(6.37008, 0.35)
+
   }
 
   # synergy ----------
   if (SMC > 0 & RTSS %in% c("EPI", "SV", "hybrid")) {
 
+    # Thompson et al. 2022
     params$rtss_beta <- 70.9
     params$rtss_alpha <- 0.868
     params$rtss_vmax <- 0.843
@@ -497,7 +525,7 @@ runsimGF <- function(x){ # x = scenario #
   output <- run_simulation(
     timesteps = warmup + sim_length,
     # correlations = correlations,
-    parameters = params) %>%
+    parameters = params) |>
 
     # add vars to output
     mutate(ID = ID,
@@ -512,6 +540,7 @@ runsimGF <- function(x){ # x = scenario #
            seasonality = seas_name,
            speciesprop = paste(speciesprop, sep = ',', collapse = ''),
            ITN = ITN,
+           ITN2 = ITNuse2,
            ITNuse = ITNuse,
            ITNboost = ITNboost,
            resistance,
@@ -523,39 +552,39 @@ runsimGF <- function(x){ # x = scenario #
            fifth = fifth,
            bednet_timesteps = list(bednet_timesteps),
            smc_timesteps = list(smc_timesteps),
-           rtss_mass_timesteps = list(rtss_mass_timesteps)) %>%
-    ungroup() %>%
-    filter(timestep > 0) %>% # remove warmup period
+           rtss_mass_timesteps = list(rtss_mass_timesteps)) |>
+    ungroup() |>
+    filter(timestep > 0) |> # remove warmup period
 
     # statistics by month
     mutate(year = ceiling(timestep/year),
-           month = ceiling(timestep/month)) %>%
+           month = ceiling(timestep/month)) |>
 
     # only necessary variables
     dplyr::select(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-                  ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+                  ITN, ITN2, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
                   starts_with("n_inc_severe"), starts_with("p_inc_severe"),
                   starts_with("n_rtss"),
                   starts_with("n_inc"), starts_with("p_inc"),
                   starts_with("n_detect"), starts_with("p_detect"),
                   starts_with("n_"), -n_bitten, n_treated, n_infections, bednet_timesteps,
-                  smc_timesteps, rtss_mass_timesteps) %>%
+                  smc_timesteps, rtss_mass_timesteps) |>
 
     # take means of populations and sums of cases by month
     group_by(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
-             ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
-             bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
+             ITN, ITN2, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
+             bednet_timesteps, smc_timesteps, rtss_mass_timesteps) |>
 
     mutate_at(vars(n_0_91.25:n_36500_73000, n_730_3650,
-                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) %>%
+                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) |>
     mutate_at(vars(n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
-                   n_treated, n_infections), sum, na.rm = TRUE) %>%
+                   n_treated, n_infections), sum, na.rm = TRUE) |>
 
     dplyr::select(n_0_91.25:n_36500_73000,
                   n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
                   n_detect_730_3650, p_detect_730_3650,
                   n_730_3650,
-                  n_treated, n_infections) %>%
+                  n_treated, n_infections) |>
     distinct()
 
 
@@ -615,7 +644,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
   params$prevalence_rendering_min_ages = 2 * year
   params$prevalence_rendering_max_ages = 10 * year
 
-  # demography ----------
+# demography ----------
   flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
   ages <- round(flat_demog$V3 * year) # top of age bracket
   deathrates <- flat_demog$V5 / 365 # age-specific death rates
@@ -623,9 +652,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
   params <- set_demography(
     params,
     agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
+    timesteps = 0,
+    deathrates = matrix(deathrates, nrow = 1)
   )
 
   # vectors ----------
@@ -642,7 +670,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   # ITNs ----------
   # find values in S.I. of 10.1038/s41467-018-07357-w
-  # or in Table S1.3 of Ellie's 2021 paper
+  # or in Table S1.3 of https://www.sciencedirect.com/science/article/pii/S2542519621002965#sec1
   # same value for all species
   bednet_timesteps <- c(0)
 
@@ -679,7 +707,13 @@ runsimGF_casestudy <- function(x){ # x = scenario #
                         ITN=='pbo' & resistance==0.8 ~ 1.311)
 
   ITNuse1 = ITNuse
-  ITNuse2 = ITNuse1 + .10   # ITN boost by 10%
+  ITNuse2 = case_when(ITNuse1 == 0 ~  0.066, # pop use 0 to 0.10
+                      ITNuse1 == 0.066 ~  0.141, # pop use 0.10 to 0.20
+                      ITNuse1 == 0.141 ~  0.231, # pop use 0.20 to 0.30
+                      ITNuse1 == 0.231 ~  0.339, # pop use 0.30 to 0.40
+                      ITNuse1 == 0.339 ~  0.473, # pop use 0.40 to 0.50
+                      ITNuse1 == 0.473 ~  0.641, # pop use 0.50 to 0.60
+                      ITNuse1 == 0.641 ~  0.858) # pop use 0.60 to 0.70
 
   if (ITNboost == 0) {      # if ITNs are not boosted, keep ITN use constant
     ITNuse2 = ITNuse1
@@ -695,7 +729,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
     coverages = c(rep(ITNuse1, npre),         # set baseline coverage
                   rep(ITNuse2, npost)),    # set intervention coverage
-    retention = 3 * year,
+    retention = 5 * year,
     dn0 = matrix(c(rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost),
                    rep(dn0_1, npre), rep(dn0_2, npost)),
@@ -785,8 +819,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -810,8 +844,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
       drug = 2,
       timesteps = sort(timesteps),
       coverages = rep(SMC, length(timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
+      min_ages = rep((0.25 * year), length(timesteps)),
+      max_ages = rep((5 * year), length(timesteps)))
 
     smc_timesteps <- params$smc_timesteps - warmup
   }
@@ -825,9 +859,8 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
+      coverages = RTSScov,
+      timesteps = warmup,
       age = round(6*month),
       min_wait = 0,
       boosters = boosters,
@@ -840,21 +873,27 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   if (RTSS == "SV") {
     peak <- peak_season_offset(params)
-    first <- round(warmup+(peak-month*3.5),0)
+    if(seas_name == "highly seasonal"){
+      first <- round(warmup + (peak - month * 3.5), 0)}
+    if(seas_name == "seasonal"){
+      first <- round(warmup + (peak - month * 5.5), 0)}
     timesteps <- c(first, first+seq(year, sim_length, year))
-    params$rtss_doses <- round(c(0,1*month,2*month))
+    params$rtss_doses <- round(c(0, 1 * month, 2 * month))
 
-    boosters <- if(fifth==0) round(c(12*month+2*month)) else round(c(12*month+2*month, 24*month+2*month))
+    boosters <- if(fifth == 0) round(c(12 * month)) else round(c(12 * month, 24 * month))
 
     params <- set_mass_rtss(
       parameters = params,
       timesteps = timesteps,
       coverages = rep(RTSScov,length(timesteps)),
-      min_ages = round(5*month),
-      max_ages = round(17*month),
+      min_ages = round(5 * month),
+      max_ages = round(17 * month),
       min_wait = 0,
       boosters = boosters,
       booster_coverage = rep(.80, length(boosters)))
+
+    # update booster to have same effect as dose 3 per Thompson et al. 2022
+    params$rtss_cs_boost <- c(6.37008, 0.35)
 
     rtss_mass_timesteps <- params$rtss_mass_timesteps - warmup
 
@@ -862,25 +901,34 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   # hybrid ----------
   if (RTSS == "hybrid") {
-    params$rtss_doses <- round(c(0,1.5*month,3*month))
+    params$rtss_doses <- round(c(0, 1.5 * month, 3 * month))
 
     peak <- peak_season_offset(params)
-    first <- round(warmup+(peak-month*3.5),0)
-    boosters <- if(fifth==0) round(c(first+3*month),0) else round(((first+3*month) + c(0, year)),0)
+
+    if(seas_name == "highly seasonal"){
+      boost <- round((peak - month * 1.5), 0)}
+    if(seas_name == "seasonal"){
+      boost <- round((peak - month * 3.5), 0)}
+
+    boosters <- if(fifth == 0) boost else c(boost, boost + year)
 
     params <- set_rtss_epi(
       parameters = params,
-      start = warmup,
-      end = warmup + sim_length,
-      coverage = RTSScov,
-      age = round(6*month),
-      min_wait = 0,
+      coverages = RTSScov,
+      timesteps = warmup,
+      age = round(6 * month),  # 6, 7,5, 9 months
+      min_wait = round(6 * month),
       boosters = boosters,
       booster_coverage = rep(.80, length(boosters)),
       seasonal_boosters = TRUE)
+
+    # update booster to have same effect as dose 3 per Thompson et al. 2022
+    params$rtss_cs_boost <- c(6.37008, 0.35)
+
   }
 
   # synergy ----------
+  # Thompson et al. 2022
   if (SMC > 0 & RTSS %in% c("EPI", "SV", "hybrid")) {
 
     params$rtss_beta <- 70.9
@@ -907,7 +955,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
 
   # add in parameter draws  ----------
   # choose a parameter draw
-  d <- readRDS('./02_code/HPC_median/parameter_draws.rds')[drawID,]
+  d <- readRDS('./02_code/HPC_draws/parameter_draws.rds')[drawID,]
 
   # over-write malariasimulation parameters to match the parameter draw
   params$dd = d$dur_D
@@ -972,7 +1020,7 @@ runsimGF_casestudy <- function(x){ # x = scenario #
   output <- run_simulation(
     timesteps = warmup + sim_length,
     # correlations = correlations,
-    parameters = params) %>%
+    parameters = params) |>
 
     # add vars to output
     mutate(ID = ID,
@@ -998,13 +1046,13 @@ runsimGF_casestudy <- function(x){ # x = scenario #
            fifth = fifth,
            bednet_timesteps = list(bednet_timesteps),
            smc_timesteps = list(smc_timesteps),
-           rtss_mass_timesteps = list(rtss_mass_timesteps)) %>%
-    ungroup() %>%
-    filter(timestep > 0) %>% # remove warmup period
+           rtss_mass_timesteps = list(rtss_mass_timesteps)) |>
+    ungroup() |>
+    filter(timestep > 0) |> # remove warmup period
 
     # statistics by month
     mutate(year = ceiling(timestep/year),
-           month = ceiling(timestep/month)) %>%
+           month = ceiling(timestep/month)) |>
 
     # only necessary variables
     dplyr::select(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
@@ -1014,23 +1062,23 @@ runsimGF_casestudy <- function(x){ # x = scenario #
                   starts_with("n_inc"), starts_with("p_inc"),
                   starts_with("n_detect"), starts_with("p_detect"),
                   starts_with("n_"), -n_bitten, n_treated, n_infections, bednet_timesteps,
-                  smc_timesteps, rtss_mass_timesteps) %>%
+                  smc_timesteps, rtss_mass_timesteps) |>
 
     # take means of populations and sums of cases by month
     group_by(ID, scenario, drawID, EIR, warmup, sim_length, population, pfpr, month, year, seasonality, speciesprop,
              ITN, ITNuse, ITNboost, resistance, IRS, treatment, SMC, RTSS, RTSScov, fifth,
-             bednet_timesteps, smc_timesteps, rtss_mass_timesteps) %>%
+             bednet_timesteps, smc_timesteps, rtss_mass_timesteps) |>
 
     mutate_at(vars(n_0_91.25:n_36500_73000, n_730_3650,
-                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) %>%
+                   n_detect_730_3650, p_detect_730_3650), mean, na.rm = TRUE) |>
     mutate_at(vars(n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
-                   n_treated, n_infections), sum, na.rm = TRUE) %>%
+                   n_treated, n_infections), sum, na.rm = TRUE) |>
 
     dplyr::select(n_0_91.25:n_36500_73000,
                   n_inc_severe_0_91.25:p_inc_clinical_36500_73000,
                   n_detect_730_3650, p_detect_730_3650,
                   n_730_3650,
-                  n_treated, n_infections) %>%
+                  n_treated, n_infections) |>
     distinct()
 
 

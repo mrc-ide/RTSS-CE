@@ -3,246 +3,172 @@
 
 # set-up
 source("./02_code/Figures/data_and_libraries.R")
-
 library(malariasimulation)
 
 year <- 365
-month <- year/12
-warmup <- 6 * year
-sim_length <- 1 * year
+month <- year / 12
 
-# create combination of all runs and remove non-applicable scenarios
-seas_name <- c('highly seasonal', 'seasonal', 'perennial')
+# seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
+# drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
+# g0 = a0, a = g, b = h
+seas_name <- 'highly seasonal'
+seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0.0617547))
+s1 <- tibble(seasonality, seas_name)
 
-# EIR / prev match from 'PfPR_EIR_match.R'
-match <- readRDS("./02_code/HPC_median/EIRestimates.rds") %>%
-  filter(treatment == 0.45 & ITN == 'pyr' & ITNuse == 0 & pfpr == 0.4)
+seas_name <- 'seasonal'
+seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
+s2 <- tibble(seasonality, seas_name)
 
-combo <- tibble(seas_name) %>%
-  left_join(match %>%
-            ungroup() %>%
-            select(-ITN, -treatment, -ITNuse, -pfpr))
+seas_name <- 'perennial'
+seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
+s3 <- tibble(seasonality, seas_name)
 
+stable <- bind_rows(s1, s2, s3)
 
-runsimGF <- function(seas_name,         # name of seasonal profile
-                     starting_EIR      # equilibrium EIR
-                     ){
+# determine intervention timings
+add_dose <- function(x){
 
-  # define seasonality
-  # seasonal profiles: c(g0, g[1], g[2], g[3], h[1], h[2], h[3])
-  # drawn from mlgts: https://github.com/mrc-ide/mlgts/tree/master/data
-  if(seas_name == 'highly seasonal'){
-    seasonality <- list(c(0.284596,-0.317878,-0.0017527,0.116455,-0.331361,0.293128,-0))
-  }
+  data <- stable[x, ]
 
-  if(seas_name == 'seasonal'){
-    seasonality <- list(c(0.285505,-0.325352,-0.0109352,0.0779865,-0.132815,0.104675,-0.013919))
-  }
-
-  if(seas_name == 'perennial'){
-    seasonality <- list(c(0.2852770,-0.0248801,-0.0529426,-0.0168910,-0.0216681,-0.0242904,-0.0073646))
-  }
-
-  # get starting parameters ----------
   params <- get_parameters(list(
-    human_population = 20000,
+    human_population = 1000,
     model_seasonality = TRUE,
     # rainfall fourier parameters
-    g0 = unlist(seasonality)[1],
-    g = unlist(seasonality)[2:4],
-    h = unlist(seasonality)[5:7],
+    g0 = unlist(data$seasonality)[1],
+    g = unlist(data$seasonality)[2:4],
+    h = unlist(data$seasonality)[5:7],
     individual_mosquitoes = FALSE))
 
-  # outcome definitions ----------
-  # incidence for every 5 year age group
-  params$clinical_incidence_rendering_min_ages = 0*year
-  params$clinical_incidence_rendering_max_ages = 5*year
+  # assign RTS,S
+  data$peak <- peak_season_offset(params) + year
+  if(data$seas_name == "highly seasonal"){
+    data$dose1 <- round((data$peak - month * 3.5), 0)}
+  if(data$seas_name == "seasonal"){
+    data$dose1 <- round((data$peak - month * 5.5), 0)}
+  if(data$seas_name == "perennial"){
+    data$dose1 <- NA}
 
-  # demography ----------
-  flat_demog <- read.table('./01_data/Flat_demog.txt') # from mlgts
-  ages <- round(flat_demog$V3 * year) # top of age bracket
-  deathrates <- flat_demog$V5 / 365 # age-specific death rates
+  data$dose2 <- round(data$dose1 + 1*month)
+  data$dose3 <- round(data$dose1 + 2*month)
+  data$boost <- data$dose3
 
-  params <- set_demography(
-    params,
-    agegroups = ages,
-    timesteps = 1,
-    deathrates = matrix(deathrates, nrow = 1),
-    birthrates = find_birthrates(population, ages, deathrates)
-  )
+  data$EPI <- list(c(year, year * 2, 0, 0.03))
 
-  # vectors ----------
-  params <- set_species(
-    parameters = params,
-    species = list(arab_params, fun_params, gamb_params),
-    proportions = c(0.25, 0.25, 0.5))
+  # assign SMC
+  data$smc <- list(rep(NA, 4)) # placeholder
 
-  # proportion of bites taken in bed for each species
-  # find values in S.I. of 10.1038/s41467-018-07357-w Table 3
-  params$phi_bednets <- c(0.9, 0.9, 0.89) # Hogan et al. 2020
-  # proportion of bites taken indoors for each species
-  params$phi_indoors <- c(0.96, 0.98, 0.97) # Hogan et al. 2020
-
-  # ITNs ----------
-  # find values in S.I. of 10.1038/s41467-018-07357-w
-  # same value for all species
-  itn_timesteps <- 1
-
-  # treatment ----------
-  params <- set_drugs(
-    parameters = params,
-    list(AL_params, SP_AQ_params))
-
-  params$drug_prophylaxis_scale <- c(10.6, 39.34)
-  params$drug_prophylaxis_shape <- c(11.3, 3.40)
-
-  params <- set_clinical_treatment(
-    parameters = params,
-    drug = 1,
-    timesteps = c(1),
-    coverages = 0.45)
-
-  # SMC ----------
-  smc_timesteps <- 0
-
-  if (seas_name == 'seasonal') {
-    peak <- peak_season_offset(params)
-    first <- round(c(peak+c(-2,-1,0,1,2)*month),0)
-    smc_timesteps <- sort(rep(first, sim_length/year))
+  if(data$seas_name == "highly seasonal"){
+    data$smc <- list(c(round(c(data$peak - year + c(-1, 0, 1, 2) * month), 0),
+                     round(c(data$peak + c(-1, 0, 1, 2) * month), 0)))
+  }
+  if(data$seas_name == "seasonal"){
+    data$smc <- list(c(round(c(data$peak + c(-2, -1, 0, 1, 2) * month), 0)))
   }
 
-  if (seas_name == 'highly seasonal') {
-    peak <- peak_season_offset(params)
-    first <- round(c(peak+c(-1,0,1,2)*month),0)
-    smc_timesteps <- sort(rep(first, sim_length/year))
+  # assign ITN
+  data$ITN <- "ITN *"
+  data$time3 <- 1
 
-    params <- set_drugs(
-      parameters = params,
-      list(AL_params, SP_AQ_params))
-
-    params$drug_prophylaxis_scale <- c(10.6, 39.34)
-    params$drug_prophylaxis_shape <- c(11.3, 3.40)
-
-    params <- set_smc(
-      parameters = params,
-      drug = 2,
-      timesteps = smc_timesteps,
-      coverages = rep(0.85, length(smc_timesteps)),
-      min_age = round(0.25*year),
-      max_age = round(5*year))
-  }
-
-  if (seas_name == 'perennial') {
-    smc_timesteps <- 0
-  }
-
-  # SV ----------
-  rtss_mass_timesteps <- 0
-  peak <- peak_season_offset(params)
-  rtss_mass_timesteps <- round((peak-month*3.5) ,0)
-
-  # EIR equilibrium ----------
-  params <- set_equilibrium(params, as.numeric(starting_EIR))
-
-  # run simulation ----------
-  set.seed(123)
-
-  output <- run_simulation(
-    timesteps = warmup + sim_length,
-    parameters = params)
-
-  results <- output %>%
-
-    # add vars to output
-    mutate(timestep = timestep - warmup,
-           seasonality = seas_name) %>%
-    filter(timestep > 0) %>% # remove warmup period
-
-    # statistics by month
-    mutate(year = ceiling(timestep/year),
-           month = ceiling(timestep/month),
-           CI_0_5 = p_inc_clinical_0_1825 / n_0_1825) %>%
-
-    group_by(seasonality, month) %>%
-    summarize(CI_0_5 = sum(CI_0_5)) %>%
-
-    # add intervention timesteps
-    mutate(smc_timesteps = list(smc_timesteps),
-           itn_timesteps = itn_timesteps,
-           rtss_mass_timesteps = rtss_mass_timesteps)
-
-  return(results)
-
+  return(data)
 }
 
-# run function
-output <- map2_dfr(combo$seas_name, combo$starting_EIR, runsimGF)
+interventions <- map_dfr(c(1:3), add_dose) |>
+  rename("seas" = "seasonality", "seasonality" = "seas_name") |>
+  rowwise() |>
+  mutate(round1 = unlist(smc)[1],
+         round2 = unlist(smc)[2],
+         round3 = unlist(smc)[3],
+         round4 = unlist(smc)[4],
+         round5 = unlist(smc)[5],
+         round6 = unlist(smc)[6],
+         round7 = unlist(smc)[7],
+         round8 = unlist(smc)[8]) |>
+  pivot_longer(dose1:boost, names_to = "vaccine", values_to = "time1") |>
+  pivot_longer(round1:round8, names_to = "SMC", values_to = "time2"); interventions
 
-# copy dataset twice for pre- and post-intervention
-output <- rbind(output, output %>% mutate(month = month-13))
 
-# pull out intervention timings
-SMCtime <- output %>% select(smc_timesteps, seasonality) %>%
-  group_by(seasonality) %>%
-  filter(seasonality != 'perennial') %>%
-  mutate(t1 = unlist(smc_timesteps)[[1]],
-         t2 = unlist(smc_timesteps)[[2]],
-         t3 = unlist(smc_timesteps)[[3]],
-         t4 = unlist(smc_timesteps)[[4]],
-         t5 = unlist(smc_timesteps)[[5]]) %>%
-  distinct() %>%
-  pivot_longer(cols = t1:t5, names_to = "time", values_to = "month") %>%
-  mutate(month = month / (365/12) + 1, intervention='SMC') %>% select(-smc_timesteps, -time)
+# determine CI at baseline with no interventions
+run_model <- function(x){
 
-SMCtime <- rbind(SMCtime, SMCtime %>% filter(seasonality == 'highly seasonal') %>% mutate(month = month-13)) %>%
-  filter(!is.na(month))
+  data <- stable[x, ]
 
-RTSStime <- output %>% select(rtss_mass_timesteps, seasonality) %>%
-  group_by(seasonality) %>%
-  mutate(month = unlist(rtss_mass_timesteps)[[1]]) %>%
-  distinct() %>%
-  mutate(month = month / (365/12) + 1, intervention='RTS,S seasonal dose 3',
-         month = ifelse(seasonality == 'perennial', 0, month)) %>% select(-rtss_mass_timesteps)
+  params <- get_parameters(list(
+    human_population = 10000,
+    clinical_incidence_rendering_min_ages = c(0, 0),
+    clinical_incidence_rendering_max_ages = c(5 * year, 200 * year),
+    model_seasonality = TRUE,
+    # rainfall fourier parameters
+    g0 = unlist(data$seasonality)[1],
+    g = unlist(data$seasonality)[2:4],
+    h = unlist(data$seasonality)[5:7],
+    individual_mosquitoes = FALSE))
 
-ITNtime <- output %>% select(bednet_timesteps, seasonality) %>%
-  group_by(seasonality) %>%
-  mutate(month = bednet_timesteps) %>%
-  distinct() %>%
-  mutate(month = month / (365/12) + 1, intervention='ITN *') %>% select(-bednet_timesteps)
+  params <- set_equilibrium(params, init_EIR = 30)
 
-ITNtime <- rbind(ITNtime, ITNtime %>% mutate(month = month-13))
+  print(paste("running model", x))
 
-interventions <- rbind(SMCtime, RTSStime, ITNtime)
+  output <- run_simulation(6 * 365, params)
 
-my_text <- data_frame(seasonality = 'perennial',
-                      lab = c('pre-intervention', 'post-intervention'),
-                      x = c(-6, 7),
-                      y = c(0.25,0.25))
+  output <- as_tibble(output)
+  output$seasonality <- data$seas_name
 
-# plot
-ggplot(data = output) + # %>% filter(seasonality != 'perennial')
-  geom_line(aes(x = month, y = CI_0_5), alpha = 0.8) +
-  geom_rect(data = interventions %>% filter(intervention == 'RTS,S seasonal dose 3'), aes(xmin=1, xmax=12, ymin=0.01, ymax=0.03, fill = 'RTSS'), alpha = 0.1) +
-  geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month<0),
-            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
-  geom_rect(data = interventions %>% filter(seasonality=='highly seasonal' & intervention=='SMC' & month>0),
-            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
-  geom_rect(data = interventions %>% filter(seasonality=='seasonal' & intervention=='SMC'),
-            aes(xmin = min(month, na.rm = T), xmax = max(month, na.rm = T)+1, ymin = 0, ymax = 0.3, fill = intervention), lty = 2, alpha = 0.02) +
-  geom_vline(data = interventions, aes(xintercept = month, color = intervention), lty = 2) +
-  geom_rect(aes(xmin = -0.9, xmax = 0.9, ymin = -1, ymax = 0.3), fill = 'white') +
-  geom_vline(aes(xintercept=0)) +
+  output <- output |>
+    mutate(timestep = timestep - 4 * 365) |>
+    filter(timestep > 0)
+
+  return(output)
+}
+
+CI <- map_dfr(c(1:3), run_model)
+
+
+# clean the output CI data with no interventions
+CI_plot <- CI |>
+  mutate(month = ceiling(timestep / month)) |>
+  mutate(month = case_when(month >= 1 & month <= 12 ~ month - 13,
+                           month >= 13 ~ month - 12)) |>
+  mutate(c_inc = p_inc_clinical_0_73000 / n_0_73000,
+         c_inc_u5 = p_inc_clinical_0_1825 / n_0_1825)
+
+
+# plot CI and dose timings, seasonal settings only
+# text for plot
+my_text <- tibble(seasonality = "perennial",
+                  lab = c("pre-intervention", "post-intervention"),
+                  x = c(year * 0.5, year * 1.5),
+                  y = c(0.02, 0.02))
+# age-based rectangle
+EPI <- tibble(xmin = year, xmax = year * 2, ymin = 0, ymax = 0.003, seasonality = c("perennial", "seasonal", "highly seasonal"))
+# SMC coverage rectangle
+interventions |> select(seasonality, SMC, time2) |> filter(!is.na(time2)) |> distinct()
+SMC <- tibble(xmin = c(533, 201, 201 + year), xmax = c(624 + month, 292 + month, 292 + month + year),
+              ymin = rep(0, 3), ymax = rep(Inf, 3), seasonality = c("seasonal", "highly seasonal", "highly seasonal"))
+
+ggplot() +
+  stat_smooth(data = CI_plot, aes(x = timestep, y = c_inc_u5), span = .2, se = F,
+              color = "grey", fill = "grey", alpha = 0.5, geom = "area") +
+  geom_rect(data = EPI,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = "RTS,S age-based"), alpha = 0.1) +
+  geom_rect(data = SMC,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = "SMC coverage"), alpha = 0.1) +
+  geom_vline(data = interventions, aes(xintercept = time1, color = "RTS,S seasonal"), lty = 2) +
+  geom_vline(data = interventions, aes(xintercept = time2, color = "SMC"), lty = 2) +
+  geom_vline(data = interventions, aes(xintercept = time3, color = "ITN*"), lty = 2) +
+  geom_vline(xintercept = year + 1) +
   geom_text(data = my_text, aes(x = x,  y = y, label = lab)) +
-  labs(x = 'month', y = 'monthly clinical incidence, 0-5 years', color = '', fill = '') +
-  scale_x_continuous(breaks = seq(-12, 12, 1)) +
   facet_grid(factor(seasonality,
-                    levels = c('perennial', 'seasonal', 'highly seasonal')) ~ .) +
-  coord_cartesian(xlim = c(-12, 12), ylim = c(0, 0.3)) +
-  scale_fill_manual(values = c('#088BBE', '#F6A1A5'),
-                    labels = c('RTS,S age-based','SMC coverage')) +
+                    levels = c("perennial", "seasonal", "highly seasonal")) ~ .) +
+  coord_cartesian(xlim = c(1, 2 * year - 43), ylim = c(0, max(CI_plot$c_inc_u5))) +
   scale_color_manual(values = c('#1BB6AF','#088BBE','#F6A1A5')) +
-  theme_classic()
+  scale_fill_manual(values = c("#088BBE", "#F6A1A5")) +
+  labs(x = "month", y = "clinical incidence, 0-5 years", color = "", fill = "") +
+  scale_x_continuous(breaks = seq(1, 2 * year + month, month), labels = seq(-12, 12, 1)) +
+  theme_classic() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_line(color = "#F5F5F5", size = 0.2))
 
-ggsave('./03_output/figure1.pdf', width = 8, height = 3)
+# save
+ggsave('./03_output/figure1.pdf', width = 8, height = 3.5)
 
 

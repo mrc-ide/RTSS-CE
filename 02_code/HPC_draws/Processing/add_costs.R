@@ -38,34 +38,44 @@ add_costs <- function(x # dataframe to read in and process
   population <- x$population[1]
   sim_length <- x$sim_length[1]
 
-  # Prepare to add costs to dataset
-  dalyoutput_cost <- x %>%
+  # prepare to add costs to dataset
+  dalyoutput_cost <- x |>
+
+    mutate(ITNuse = case_when(ITNuse == 0 ~ 0, # pop use 0
+                        ITNuse == 0.141 ~ 0.20, # pop use 0.20
+                        ITNuse == 0.339 ~ 0.40, # pop use 0.40
+                        ITNuse == 0.641 ~ 0.60, # pop use 0.60
+
+                        ITNuse == 0.231 ~ 0.30, # pop use 0.30
+                        ITNuse == 0.473 ~ 0.50, # pop use 0.50
+                        ITNuse == 0.641 ~ 0.60)) |>  # pop use 0.60
 
     mutate(ITNuse2 = ifelse(ITNboost == 1, ITNuse + .10, ITNuse), # account for booster coverage
-           ITNcost = case_when(ITN == 'pyr' ~ PYRcost,            # account for ITN type-specific cost
-                               ITN == 'pbo' ~ PBOcost)) %>%
+           ITNcost = case_when(ITN == "pyr" ~ PYRcost,            # account for ITN type-specific cost
+                               ITN == "pbo" ~ PBOcost)) |>
 
     # count the number of interventions administered and the frequency of ITN dist
     mutate(bednet_distribution_frequency = as.numeric(lapply(lapply(bednet_timesteps,diff), unique)),
            bednet_timesteps = length(Filter(function(x) (x > 0 & x <= sim_length), bednet_timesteps)),
            smc_timesteps = length(Filter(function(x) (x > 0 & x <= sim_length), smc_timesteps)),
-           rtss_mass_timesteps = length(Filter(function(x) (x > 0 & x<= sim_length), rtss_mass_timesteps))) %>%
+           rtss_mass_timesteps = length(Filter(function(x) (x > 0 & x<= sim_length), rtss_mass_timesteps))) |>
 
     # merge in RTSS costing dataframe
-    merge(rtsscost_df) %>%
+    merge(rtsscost_df) |>
 
-    ungroup() %>% rowwise()
+    ungroup() |> rowwise()
 
 
-  # read in net distribution conversions, calculated through 'netz_dist.R'
-  nets_distributed <- readRDS('./03_output/netz_data.rds')
+  # read in net distribution conversions, calculated through "netz_dist.R"
+  nets_distributed <- readRDS("./03_output/netz_data.rds")
 
   # create cost variables
   # 77% of treatment costs are from the public sector (DHS, SSA)
-  dalyoutput_cost <- dalyoutput_cost %>%
+  dalyoutput_cost <- dalyoutput_cost |>
+    mutate(ITNuse2 = round(ITNuse2, 2)) |>
     left_join(nets_distributed,
-              by=c('ITNuse2' = 'target_use')) %>%
-    mutate(annual_percapita_nets_distributed = ifelse(ITNuse2==0, 0,
+              by = c("ITNuse2" = "target_use")) |>
+    mutate(annual_percapita_nets_distributed = ifelse(ITNuse2 == 0, 0,
                                                       annual_percapita_nets_distributed),
            # calculate cost of interventions
            # true net cost accounting for non-linear relationship
@@ -76,7 +86,7 @@ add_costs <- function(x # dataframe to read in and process
            cost_ITNmax = population * annual_percapita_nets_distmax * sim_length/365 * ITNcost,
            # ITN linear
            cost_ITN_linear = population * ITNuse2 * bednet_timesteps * ITNcost,
-           # non-severe treatment
+           # non-severe treatment (0.77 = proportion treated in the public sector)
            cost_clinical = ((cases - severe_cases - u5_cases) * treatment * TREATcost_adult) * .77 +
              ((u5_cases - u5_severe) * treatment * TREATcost_child) * .77,
            # severe treatment
@@ -97,9 +107,9 @@ add_costs <- function(x # dataframe to read in and process
              # cost ITNs
              n_0_1825 * annual_percapita_nets_distributed * sim_length/365 * ITNcost +
              # cost clinical
-             ((u5_cases-u5_severe) * treatment * TREATcost_child)*.77 +
+             ((u5_cases-u5_severe) * treatment * TREATcost_child) * .77 +
              # cost severe
-             (u5_severe * treatment * SEVcost_child)*.77 +
+             (u5_severe * treatment * SEVcost_child) * .77 +
              # cost SMC and cost VAX are all among children
              cost_SMC + cost_vax)
   # NOTE that values are NA for the target rates 0.75, 0.85 with the min SSA rate #

@@ -16,35 +16,35 @@ calculate_mode <- function(x) {
 costdose <- function(x) {
 
   # choose univariate scenarios
-  if(x == 'all') {
-    output <- scenarios %>%
-      filter(intervention %in% c('RTS,S seasonal', 'RTS,S age-based', 'SMC', 'none', 'ITN 10% increase', 'ITN PBO'))
+  if(x == "all") {
+    output <- scenarios |>
+      filter(intervention %in% c("RTS,S seasonal", "RTS,S age-based", "SMC", "none", "ITN 10% increase", "ITN PBO"))
   }
 
-  if(x == 'seasonal') {
-    output <- scenarios %>%
-      filter(intervention %in% c('RTS,S seasonal', 'SMC', 'none', 'ITN 10% increase', 'ITN PBO'))
+  if(x == "seasonal") {
+    output <- scenarios |>
+      filter(intervention %in% c("RTS,S seasonal", "SMC", "none", "ITN 10% increase", "ITN PBO"))
   }
 
-  if(x == 'age-based') {
-    output <- scenarios %>%
-      filter(intervention %in% c('RTS,S age-based', 'SMC', 'none', 'ITN 10% increase', 'ITN PBO'))
+  if(x == "age-based") {
+    output <- scenarios |>
+      filter(intervention %in% c("RTS,S age-based", "SMC", "none", "ITN 10% increase", "ITN PBO"))
   }
 
-  output <- output %>%
-    filter(cost_per_dose == 12.01 & delivery_cost == 1.62) %>%
+  output <- output |>
+    filter(cost_per_dose == 12.01 & delivery_cost == 1.62) |>
     # combine RTS,S strategies
-    mutate(intervention = ifelse(intervention %in% c('RTS,S age-based', 'RTS,S seasonal'), 'RTS,S', intervention)) %>%
-    arrange(ID, drawID) %>%
-    group_by(ID, drawID) %>%
+    mutate(intervention = ifelse(intervention %in% c("RTS,S age-based", "RTS,S seasonal"), "RTS,S", intervention)) |>
+    arrange(ID, drawID) |>
+    group_by(ID, drawID) |>
     # find minimum CE in each group. If intervention == RTS,S find the second or third lowest CE and move RTS,S to the top
-    mutate(CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
-           CE = ifelse(CE == min(CE) & intervention == 'RTS,S', 100000, CE),
+    mutate(CE = ifelse(CE == min(CE) & intervention == "RTS,S", 100000, CE),
+           CE = ifelse(CE == min(CE) & intervention == "RTS,S", 100000, CE),
            CEmin = min(CE, na.rm = T),
            interventionmin = ifelse(CE == CEmin, intervention, NA),
-           interventionmin = calculate_mode(interventionmin)) %>%
-    filter(intervention %in% c('RTS,S')) %>%
-    rowwise() %>%
+           interventionmin = calculate_mode(interventionmin)) |>
+    filter(intervention %in% c("RTS,S")) |>
+    rowwise() |>
     # calculate needed cost of RTS,S to match the min CE intervention
     # CEmin = (cost_total - cost_total_baseline) / (daly_baseline - daly)
     mutate(delta_cost = CEmin * (daly_baseline - daly),
@@ -55,10 +55,10 @@ costdose <- function(x) {
            # cost = dosecost + 0.111*(dosecost) + 0.165*(dosecost + 0.111*dosecost) + 0.14
            # (cost - 0.14) / 1.294315 = dose
            costRTSS = (costRTSScon - 0.14)  / 1.294315  # subtracting consumables cost
-    ) %>%
-    select(ID, seasonality, pfpr, ITNuse, ITN, RTSS, RTSScov, resistance, SMC, treatment, intervention, interventionmin, CE, CEmin, costRTSS) %>%
-    group_by(ID) %>%
-    arrange(ID, costRTSS) %>%
+    ) |>
+    select(ID, seasonality, pfpr, ITNuse, ITN, RTSS, RTSScov, resistance, SMC, treatment, intervention, interventionmin, CE, CEmin, costRTSS) |>
+    group_by(ID) |>
+    arrange(ID, costRTSS) |>
     mutate(model = x)
 
 }
@@ -66,10 +66,10 @@ costdose <- function(x) {
 
 # < all seasons box and whisker ----
 
-# output <- costdose('all')
-output <- costdose('age-based') %>% full_join(costdose('seasonal'))
+# output <- costdose("all")
+output <- costdose("age-based") |> full_join(costdose("seasonal"))
 
-seasoncosts <- output %>% group_by(seasonality, model) %>%
+seasoncosts <- output |> group_by(seasonality, model) |>
   summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm = T), 2),
             med = round(median(costRTSS, na.rm = T),2),
             q75 = round(quantile(costRTSS, probs = 0.75, na.rm = T), 2),
@@ -77,29 +77,29 @@ seasoncosts <- output %>% group_by(seasonality, model) %>%
             max = round(max(costRTSS, na.rm = T), 2))
 
 A <- ggplot(output) +
-  geom_hline(yintercept = 0, color = 'light grey') +
-  geom_boxplot(aes(x = factor(seasonality, levels = c('perennial','seasonal','highly seasonal')), y = costRTSS, fill = model, color = model),
+  geom_hline(yintercept = 0, color = "light grey") +
+  geom_boxplot(aes(x = factor(seasonality, levels = c("perennial","seasonal","highly seasonal")), y = costRTSS, fill = model, color = model),
                 alpha = 0.4, outlier.alpha = 0.1,  outlier.size = 0.1, coef = 100) +
 
-  geom_text(data = seasoncosts %>% filter(model == 'age-based'), aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = -.223) +
-  geom_text(data = seasoncosts %>% filter(model == 'age-based'), aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = -.2) +
-  geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal' & model == 'age-based'),
+  geom_text(data = seasoncosts |> filter(model == "age-based"), aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = -.223) +
+  geom_text(data = seasoncosts |> filter(model == "age-based"), aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = -.2) +
+  geom_text(data = seasoncosts |> filter(seasonality != "seasonal" & model == "age-based"),
             aes(x = seasonality, y = q75, label = q75), size = 3, nudge_y = .55, nudge_x = -.2) +
-  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal' & model == 'age-based'),
+  geom_text(data = seasoncosts |> filter(seasonality == "seasonal" & model == "age-based"),
             aes(x= seasonality, y = q75, label = format(round(q75, 2), nsmall = 2)), size = 3, nudge_y = 1.2, nudge_x = -.2) +
 
-  geom_text(data = seasoncosts %>% filter(model == 'seasonal'), aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = .19) +
-  geom_text(data = seasoncosts %>% filter(model == 'seasonal'), aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = .2) +
-  geom_text(data = seasoncosts %>% filter(seasonality != 'seasonal' & model == 'seasonal'),
+  geom_text(data = seasoncosts |> filter(model == "seasonal"), aes(x = seasonality, y = q25, label = q25), size = 3, nudge_y = -0.55, nudge_x = .19) +
+  geom_text(data = seasoncosts |> filter(model == "seasonal"), aes(x = seasonality, y = med, label = med), size = 3, nudge_y = 0.1, nudge_x = .2) +
+  geom_text(data = seasoncosts |> filter(seasonality != "seasonal" & model == "seasonal"),
             aes(x = seasonality, y = q75, label = q75), size = 3, nudge_y = .55, nudge_x = .2) +
-  geom_text(data = seasoncosts %>% filter(seasonality == 'seasonal' & model == 'seasonal'),
+  geom_text(data = seasoncosts |> filter(seasonality == "seasonal" & model == "seasonal"),
             aes(x= seasonality, y = q75, label = format(round(q75, 2), nsmall = 2)), size = 3, nudge_y = 1.2, nudge_x = .2) +
 
   scale_color_manual(values = c(rtss_age, rtss_sv)) +
   scale_fill_manual(values = c(rtss_age, rtss_sv)) +
-  geom_vline(xintercept = 0, lty = 2, color = 'grey') +
+  geom_vline(xintercept = 0, lty = 2, color = "grey") +
   theme_classic() +
-  labs(y = 'RTS,S cost (USD) per dose', x = '', fill = 'RTS,S delivery', color = 'RTS,S delivery') +
+  labs(y = "RTS,S cost (USD) per dose", x = "", fill = "RTS,S delivery", color = "RTS,S delivery") +
   coord_cartesian(ylim = c(-5, 20)) +
   theme(plot.caption.position = "plot",
         text = element_text(size = 14))
@@ -107,8 +107,8 @@ A <- ggplot(output) +
 # print stats
 seasoncosts
 
-output %>% ungroup() %>%
-  group_by(interventionmin) %>%
+output |> ungroup() |>
+  group_by(interventionmin) |>
   summarize(q25 = round(quantile(costRTSS, probs = 0.25, na.rm = T),2),
             med = round(median(costRTSS, na.rm = T),2),
             q75 = round(quantile(costRTSS, probs = 0.75, na.rm = T),2))
@@ -116,43 +116,43 @@ output %>% ungroup() %>%
 
 
 # how many are above $9.3 - stratified by SMC / ITNuse
-output %>% filter(costRTSS >= 9.3) %>% group_by(SMC, ITNuse) %>%
-  summarize(n = n()) %>%
-  ungroup() %>%
+output |> filter(costRTSS >= 9.3) |> group_by(SMC, ITNuse) |>
+  summarize(n = n()) |>
+  ungroup() |>
   mutate(t = sum(n), p = n/t * 100)
 
 
 # how many are above $9.3 - stratified by PfPR
-output %>% filter(costRTSS >= 9.3) %>% group_by(pfpr) %>%
-  summarize(n = n()) %>%
-  ungroup() %>%
+output |> filter(costRTSS >= 9.3) |> group_by(pfpr) |>
+  summarize(n = n()) |>
+  ungroup() |>
   mutate(t = sum(n), p = n/t * 100)
 
-# median cost when ITNs and SMC are not maximized
-test <- output %>% filter(ITNuse == 0.75 | SMC == 0.85)
+# median cost when ITNs and SMC are and are not maximized
+test <- output |> filter(ITNuse == 0.60 | SMC == 0.85)
 summary(test$costRTSS)
 
-test <- output %>% filter(!(ITNuse == 0.75 | SMC == 0.85))
+test <- output |> filter(!(ITNuse == 0.60 | SMC == 0.85))
 summary(test$costRTSS)
 
 
 
 # < line plot ----
 # calculate proportion of scenarios at each cost-per-dose value
-output2 <- output %>% ungroup() %>% arrange(costRTSS) %>%
-  mutate(p = (nrow(output) - row_number() + 1) / nrow(output) * 100) %>%
+output2 <- output |> ungroup() |> arrange(costRTSS) |>
+  mutate(p = (nrow(output) - row_number() + 1) / nrow(output) * 100) |>
   ungroup()
 
-dose2 <- output2 %>% filter(costRTSS <= 2) %>% top_n(-1) %>% select(p) %>% as.numeric()
-dose5 <- output2 %>% filter(costRTSS <= 5) %>% top_n(-1) %>% select(p) %>% as.numeric()
-dose93 <- output2 %>% filter(costRTSS <= 9.3) %>% top_n(-1) %>% select(p) %>% as.numeric()
-dose10 <- output2 %>% filter(costRTSS <= 10) %>% top_n(-1) %>% select(p) %>% as.numeric()
-dose135 <-  output2 %>% filter(costRTSS <= 13.5) %>% top_n(-1) %>% select(p) %>% as.numeric()
+dose2 <- output2 |> filter(costRTSS <= 2) |> top_n(-1) |> select(p) |> as.numeric()
+dose5 <- output2 |> filter(costRTSS <= 5) |> top_n(-1) |> select(p) |> as.numeric()
+dose93 <- output2 |> filter(costRTSS <= 9.3) |> top_n(-1) |> select(p) |> as.numeric()
+dose10 <- output2 |> filter(costRTSS <= 10) |> top_n(-1) |> select(p) |> as.numeric()
+dose135 <-  output2 |> filter(costRTSS <= 13.5) |> top_n(-1) |> select(p) |> as.numeric()
 
 table(output$drawID) # 450 total
 
-output3 <- output %>% ungroup() %>% group_by(drawID) %>% arrange(costRTSS) %>%
-  mutate(p = (n() - row_number() + 1) / n() * 100) %>%
+output3 <- output |> ungroup() |> group_by(drawID) |> arrange(costRTSS) |>
+  mutate(p = (n() - row_number() + 1) / n() * 100) |>
   ungroup()
 
 # create median lines and points for plot
@@ -169,18 +169,18 @@ points <- data.frame(
 )
 
 B <- ggplot(output3) +
-  geom_vline(xintercept = 0, color = 'grey') +
-  geom_segment(data = segments %>% filter(xend == 9.3),
+  geom_vline(xintercept = 0, color = "grey") +
+  geom_segment(data = segments |> filter(xend == 9.3),
                aes(x = x, xend = xend, y = y, yend = yend),
-               lty = 3, color = 'grey') +
-  geom_line(aes(x = costRTSS, y = p, group = drawID), color = 'cornflower blue', size = 1, alpha = 0.1) +
-  geom_line(data = output2, aes(x = costRTSS, y = p, group = drawID), color = 'cornflower blue', size = 1) +
-  geom_point(data = points  %>% filter(x == 9.3), aes(x = x, y = y), color = 'blue', size = 2) +
+               lty = 3, color = "grey") +
+  geom_line(aes(x = costRTSS, y = p, group = drawID), color = "cornflower blue", size = 1, alpha = 0.1) +
+  geom_line(data = output2, aes(x = costRTSS, y = p, group = drawID), color = "cornflower blue", size = 1) +
+  geom_point(data = points  |> filter(x == 9.3), aes(x = x, y = y), color = "blue", size = 2) +
   theme_classic() +
-  labs(y='% of scenarios where \nRTS,S is most cost-effective',
-       x='RTS,S cost per dose (USD)'
+  labs(y="% of scenarios where \nRTS,S is most cost-effective",
+       x="RTS,S cost per dose (USD)"
   ) +
-  geom_text(aes(x = 9.3, y = 25), label = '9.30') +
+  geom_text(aes(x = 9.3, y = 25), label = "9.30") +
   # scale_x_continuous(breaks = c(-5, 0, 2, 5, 9.3, 13.5)) +
   scale_x_continuous(breaks = c(-5, 0, seq(1, 15, 1))) +
   coord_cartesian(xlim = c(0, 15), ylim = c(0, 100)) +
@@ -188,11 +188,10 @@ B <- ggplot(output3) +
 
 
 # combined plot
-A + B + plot_annotation(tag_levels = 'A')
+A + B + plot_annotation(tag_levels = "A")
 
-   # coord_cartesian(xlim = c(0, 12), ylim = c(0, 100))) +
 
-ggsave('./03_output/figure5.pdf', width = 12, height = 4)
+ggsave("./03_output/figure5.pdf", width = 12, height = 4)
 
 
 # print stats
@@ -202,7 +201,7 @@ ggsave('./03_output/figure5.pdf', width = 12, height = 4)
 100 - dose10
 100 - dose135
 
-output2 %>% filter(p == 50) %>% select(costRTSS) %>% as.numeric()
+output2 |> filter(p == 50) |> select(costRTSS) |> as.numeric()
 
 summary(output2$costRTSS)
 
